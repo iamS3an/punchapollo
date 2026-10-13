@@ -83,8 +83,11 @@ function printSkipped(action, date, reason, details = {}) {
   console.log(JSON.stringify({ action, skipped: true, reason, date, ...details }, null, 2));
 }
 
+// Taipei time with its offset, e.g. 2026-01-05T09:00:00+08:00. Rounded up to
+// the whole second so a one-off entry never fires before the time is due.
 function isoTime(milliseconds) {
-  return new Date(milliseconds).toISOString();
+  const seconds = Math.ceil(milliseconds / 1000);
+  return `${new Date((seconds + 8 * 3600) * 1000).toISOString().slice(0, 19)}+08:00`;
 }
 
 async function main() {
