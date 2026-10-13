@@ -460,3 +460,7 @@ and computer.
 - A punch made by mistake by hand cannot be told from a deliberate one; the
   scheduled run sees it and skips its own.
 - A failed or skipped punch is only written to the log.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

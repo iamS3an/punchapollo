@@ -2,6 +2,7 @@
   "name": "punchapollo",
   "version": "1.0.0",
   "description": "Keeps a working day's attendance record on schedule through a dedicated Edge profile.",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "scripts": {
