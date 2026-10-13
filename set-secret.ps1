@@ -1,0 +1,35 @@
+param(
+    [ValidateSet("totp", "password")]
+    [Parameter(Mandatory = $true)]
+    [string]$Kind
+)
+
+$nodeCommand = Get-Command node.exe -ErrorAction SilentlyContinue
+if (-not $nodeCommand) {
+    throw "Windows Node.js was not found."
+}
+
+if ($Kind -eq "totp") {
+    $name = "totp-secret"
+    $prompt = "TOTP secret (base32 key or otpauth:// URI; input is hidden)"
+} else {
+    $name = "sso-password"
+    $prompt = "Microsoft account password (input is hidden)"
+}
+
+$directory = Join-Path $env:LOCALAPPDATA "punchapollo"
+$path = Join-Path $directory "$name.dpapi"
+
+$secure = Read-Host -AsSecureString $prompt
+if ($secure.Length -eq 0) {
+    throw "Nothing was entered."
+}
+
+New-Item -ItemType Directory -Force -Path $directory | Out-Null
+$secure | ConvertFrom-SecureString | Set-Content -Path $path -Encoding ASCII
+Write-Host "Saved DPAPI-protected secret: $path"
+
+if ($Kind -eq "totp") {
+    & $nodeCommand.Source "$PSScriptRoot\src\show-totp.js"
+    exit $LASTEXITCODE
+}

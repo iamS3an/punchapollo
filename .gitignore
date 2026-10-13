@@ -1,0 +1,7 @@
+node_modules/
+npm-debug.log*
+*.log
+logs/
+
+# Personal settings; start from punch.conf.example.
+punch.conf

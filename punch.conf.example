@@ -1,0 +1,42 @@
+# Copy this file to punch.conf and fill in your own values.
+# After changing anything, run: npm run cron:install
+# Check the result with: npm run config:show
+
+# The attendance site.
+#   SITE_URL     The page you land on after signing in, where the clock-in
+#                button is.
+#   SIGN_IN_URL  The address of the sign-in page, without its last part
+#                (/Login).
+SITE_URL=https://hr.example.com/ta
+SIGN_IN_URL=https://auth.example.com/HRM/Account
+
+# What happens when the saved session has expired.
+#   off  The sign-in page is opened and the run waits for you to sign in.
+#   on   The run signs in through Microsoft SSO by itself; SSO_DOMAIN and
+#        SSO_ACCOUNT below are then required.
+AUTO_SSO=off
+
+# Used with AUTO_SSO=on only.
+#   SSO_PROVIDER  The sign-in button on the sign-in page. Only Microsoft is
+#                 supported.
+#   SSO_DOMAIN    The domain you type on the page that follows.
+#   SSO_ACCOUNT   The account at that provider.
+SSO_PROVIDER=Microsoft
+SSO_DOMAIN=example.com
+SSO_ACCOUNT=you@example.com
+
+# Regular shift, Taipei time, as HH:MM. Scheduled clock-in lands within the
+# 30 minutes after SHIFT_START, and a full day is as long as
+# SHIFT_END - SHIFT_START.
+SHIFT_START=09:00
+SHIFT_END=18:00
+
+# Flexible hours: when a clock-in and a clock-out may happen at all.
+FLEX_CLOCK_IN_START=07:00
+FLEX_CLOCK_IN_END=11:00
+FLEX_CLOCK_OUT_START=16:00
+FLEX_CLOCK_OUT_END=20:00
+
+# Lunch break, which is not working time.
+LUNCH_START=12:00
+LUNCH_END=13:00
