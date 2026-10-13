@@ -4,6 +4,12 @@ param(
     [string]$Kind
 )
 
+# A long-lived WSL session can keep an environment snapshot from before
+# Node.js was installed; rebuild PATH from the registry so a fresh install is
+# found without restarting WSL.
+$env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
+    [System.Environment]::GetEnvironmentVariable("Path", "User")
+
 $nodeCommand = Get-Command node.exe -ErrorAction SilentlyContinue
 if (-not $nodeCommand) {
     throw "Windows Node.js was not found."
