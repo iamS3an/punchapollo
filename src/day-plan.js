@@ -44,6 +44,7 @@ function leaveBlocks(leaves, lunch) {
 // - leave that ends inside the flexible clock-out hours anchors the span to the
 //   leave end;
 // - otherwise the span starts at the actual clock-in.
+// Leave that adds up to the working time of a shift makes the day "off".
 // An existing clock-in is looked at first. One made before morning leave began
 // keeps the span at clock-in plus the shift length, with the leave inside it.
 // One made too late for leave that ends the day leaves no correct clock-out,
@@ -77,8 +78,19 @@ export function computeDayPlan(day) {
   };
 }
 
+// Leave time of the day, not counting the part that falls in the lunch break.
+function leaveWorkingTime(leaves, lunch) {
+  return merge(leaves.filter((leave) => leave.end > leave.start)).reduce((total, block) => {
+    const inLunch = Math.max(0, Math.min(block.end, lunch.end) - Math.max(block.start, lunch.start));
+    return total + (block.end - block.start) - inLunch;
+  }, 0);
+}
+
 function unboundedDayPlan({ shiftStart, shiftEnd, leaves, lunch, flex, clockInAt = null }) {
   const span = shiftEnd - shiftStart;
+  // Leave as long as the working time of a shift leaves nothing to work,
+  // wherever its sheets fall in the day.
+  if (leaveWorkingTime(leaves, lunch) >= span - (lunch.end - lunch.start)) return { type: "off" };
   const blocks = leaveBlocks(leaves, lunch);
   const opening = blocks.find(
     (block) => block.start < flex.clockIn.end && block.end > flex.clockIn.start

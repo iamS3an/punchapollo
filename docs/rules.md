@@ -17,7 +17,7 @@ Read from the site's schedule for the day:
 - a calendar event (national holiday);
 - no shift (weekend or rest day);
 - a special event named 颱風停班 (typhoon closure);
-- leave that covers the whole working day.
+- leave that adds up to a full working day.
 
 ## Leave
 
@@ -31,7 +31,7 @@ lunch break absorbs it.
 | None, or only in the middle of the day | 30 minutes after `SHIFT_START` | Shift length after the actual clock-in |
 | Begins inside the flexible clock-in hours | 5-25 minutes before the leave ends | Shift length after the leave started |
 | Ends inside the flexible clock-out hours | 5-25 minutes before (leave end - shift length) | When the leave starts |
-| Covers the whole span | Skipped | Skipped |
+| Adds up to the working time of a shift (8 hours), or covers the whole span | Skipped | Skipped |
 
 Examples with the default settings:
 
@@ -42,6 +42,8 @@ Examples with the default settings:
 | 13:00-17:00 | 07:35-07:55 | 12:01-12:05 (lunch absorbed) |
 | 14:00-18:00 | 08:35-08:55 | 14:01-14:05 |
 | 13:00-15:00 | 09:00-09:29 | clock-in + 9 hours |
+| 07:00-11:00 and 14:00-17:00 | 10:35-10:55 | 14:01-14:05 |
+| 07:00-11:00 and 14:00-18:00 | Skipped (8 hours of leave) | Skipped |
 
 Random times stay inside both the flexible hours and the margins above:
 
@@ -98,9 +100,12 @@ entries untouched:
 
 - The clock-in and clock-out minutes are random. After each scheduled clock-out
   the wrapper installs new ones for the next working day.
-- Running `cron:install` by hand during a working day sets clock-out to the
-  latest regular time, because the new clock-in minute no longer matches when
-  the day actually started.
+- Running `cron:install` by hand during a working day reads the plan for
+  today, because the new clock-in minute no longer matches when the day
+  actually started. With a clock-in already made, clock-out is set 1 to 5
+  minutes after a full shift from it; on a leave day the one-off entries below
+  are added. If the plan cannot be read, clock-out is set to the latest regular
+  time.
 - The `plan` entry runs half an hour before the flexible clock-in hours open.
 
 When the regular times do not fit a day, a one-off entry for that date is added
