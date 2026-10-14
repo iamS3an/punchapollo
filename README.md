@@ -15,10 +15,17 @@ dedicated Microsoft Edge profile on Windows.
 
 Needs Windows with Edge and Node.js, and WSL2 Ubuntu with Node.js, `cron` and
 the Asia/Taipei timezone. Starting from nothing? Follow
-[docs/install.md](docs/install.md).
+[docs/install.md](docs/install.md). Setting this up with the help of an AI
+assistant? Point it at [AGENTS.md](AGENTS.md) instead — it's the same steps
+written for an agent to execute.
+
+Clone onto the Windows side and symlink it into WSL, not onto WSL's own
+filesystem — see [docs/install.md](docs/install.md#6-get-the-project) for why
+and how to find that directory and symlink it into WSL; `cd` there first,
+then:
 
 ```bash
-git clone <repository-url> ~/punchapollo && cd ~/punchapollo
+git clone https://github.com/iamS3an/punchapollo.git && cd punchapollo
 npm install
 cp punch.conf.example punch.conf   # then fill in SITE_URL and SIGN_IN_URL
 npm run session:login              # sign in once in the Edge window that opens
@@ -56,7 +63,7 @@ changing it. An invalid setting stops everything until it is fixed.
 | `npm run config:show` | Shows the settings and the installed schedule |
 | `npm run session:login` | Reuses the saved session, or signs in if it has expired |
 | `npm run password:set` / `totp:set` | Stores the Microsoft password / authenticator secret for `AUTO_SSO=on` |
-| `npm run session:test` | Tests automatic sign-in from a clean browser; punches nothing |
+| `npm run session:test` | Tests `AUTO_SSO` (automatic sign-in) from a clean browser; punches nothing |
 
 ## What it does each day
 

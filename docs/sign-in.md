@@ -56,9 +56,9 @@ this up once at <https://mysignins.microsoft.com/security-info>:
 Without step 2 Microsoft keeps offering a push notification or another method
 first, the code prompt never appears, and the sign-in waits for manual input.
 
-`npm run session:test` signs in from a clean InPrivate browser with a throwaway
-profile on port `9223`, where Microsoft asks for everything, to confirm the
-stored values and this setup work.
+`npm run session:test` tests `AUTO_SSO` specifically: it signs in from a clean
+InPrivate browser with a throwaway profile on port `9223`, where Microsoft
+asks for everything, to confirm the stored values and this setup work.
 
 ## Security
 

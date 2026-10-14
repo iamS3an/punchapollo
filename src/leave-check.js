@@ -116,9 +116,13 @@ export function scheduleFromCalendar(calendar, dateText) {
   const hasShift = Number.isFinite(shiftStart) && Number.isFinite(shiftEnd) && shiftEnd > shiftStart;
 
   // The site moves a day's shift to the actual clock-in minute, so only its
-  // length can be compared with the configured shift.
+  // length can be compared with the configured shift. A mismatch is not
+  // fatal: punch.conf is what's actually punched by, and the flexible hours
+  // are what keep a bad value from punching somewhere unreasonable.
   if (hasShift && shiftEnd - shiftStart !== config.shiftLengthMs) {
-    throw apiError("The site's shift is not as long as the shift in punch.conf.", "UNSUPPORTED_SHIFT");
+    console.error(
+      "WARNING: the site's shift length does not match punch.conf's; punching by punch.conf's shift anyway."
+    );
   }
   const shift = timeRange(dateText, config.shift);
 

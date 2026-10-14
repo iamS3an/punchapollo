@@ -95,14 +95,26 @@ All four must print a result without an error before going on.
 
 ## 6. Get the project
 
+Clone it onto the Windows side, not onto WSL's own filesystem, and symlink it
+into your WSL home directory. Windows' `node.exe` reads this project's files
+on every run; reaching WSL's filesystem from Windows (`\\wsl.localhost\...`)
+is dramatically slower for a package with this many files — 13-25 seconds
+per run in testing, versus under 1 second from a native Windows path.
+
 ```bash
-git clone <repository-url> ~/punchapollo
+win_home="$(powershell.exe -NoProfile -Command '$env:USERPROFILE' | tr -d '\r')"
+project_dir="$(wslpath -u "$win_home")/punchapollo"
+git clone https://github.com/iamS3an/punchapollo.git "$project_dir"
+cd "$project_dir" && npm install
+ln -s "$project_dir" ~/punchapollo
 cd ~/punchapollo
-npm install
 ```
 
-`npm install` downloads the one dependency, `playwright-core`. It does not
-download a browser; the scripts use the Edge already on Windows.
+From here on `~/punchapollo` is a symlink to that native path; every command
+below and the schedule installed in step 10 work through it exactly as if it
+were a normal directory. `npm install` downloads the one dependency,
+`playwright-core`. It does not download a browser; the scripts use the Edge
+already on Windows.
 
 ## 7. Create your settings
 
@@ -144,8 +156,8 @@ npm run totp:set
 npm run session:test
 ```
 
-`session:test` signs in from a clean browser and must end with
-`authenticated: true`.
+`session:test` tests `AUTO_SSO` specifically: it signs in from a clean
+browser and must end with `authenticated: true`.
 
 ## 10. Check the plan and install the schedule
 

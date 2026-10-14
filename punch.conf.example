@@ -7,7 +7,7 @@
 #                button is.
 #   SIGN_IN_URL  The address of the sign-in page, without its last part
 #                (/Login).
-SITE_URL=https://hr.example.com/ta
+SITE_URL=https://hr.example.com
 SIGN_IN_URL=https://auth.example.com/HRM/Account
 
 # What happens when the saved session has expired.
