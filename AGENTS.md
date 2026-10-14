@@ -150,8 +150,11 @@ Ask the user to open their attendance site in their everyday browser and get:
 - Their regular shift as `SHIFT_START`/`SHIFT_END` (`HH:MM`, Taipei time).
   This is what's actually punched by; it doesn't have to match what the
   attendance site has on file. If it differs, a run logs a warning but still
-  punches by `punch.conf`'s times — the flexible hours (below) are the real
-  limit on how far off that can be before a run skips the punch instead.
+  punches by `punch.conf`'s times. The flexible clock-in hours are still a
+  hard limit (a normal-day clock-in due after `FLEX_CLOCK_IN_END` is
+  skipped); clock-out has no such limit — a full shift is always honored
+  even past `FLEX_CLOCK_OUT_END`, which only caps how far the random delay
+  after it can be pushed.
 
 Edit `punch.conf` with those values (don't ask the user to paste the whole
 file back to you — ask for the handful of values, or let them edit it

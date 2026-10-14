@@ -47,14 +47,30 @@ if [[ "${1:-}" != "--next-day" ]] &&
 
   plan_type="$(plan_value type)"
   clock_out_earliest="$(plan_value clockOutEarliest)"
+  clock_in_at="$(plan_value clockInAt)"
+  # No effect on anything already made today, but keeps today's written
+  # entry from looking unrelated to the clock-in that actually happened.
+  if [[ -n "$clock_in_at" ]]; then
+    clock_in_time=$(minutes_of "$(date -d "$clock_in_at" +%H:%M)")
+  elif [[ "$plan_type" != "normal" ]]; then
+    # Not clocked in yet, but it's a leave day: its clock-in is not at the
+    # regular shift-start formula, so use the window the plan already
+    # computed for it (e.g. shortly before a morning leave ends, or shortly
+    # before an afternoon leave begins) instead of the generic default.
+    clock_in_latest="$(plan_value latest)"
+    if [[ -n "$clock_in_latest" ]]; then
+      clock_in_time=$(minutes_of "$(date -d "$clock_in_latest" +%H:%M)")
+    fi
+  fi
   if [[ -z "$plan" ]]; then
     clock_out_time=$latest_clock_out_time
     printf 'WARNING: the plan could not be read; clock-out set to the latest time.\n' >&2
   elif [[ "$plan_type" == "off" ]] || grep -q '"hasClockOut": true' <<<"$plan"; then
     printf 'Nothing is left to punch today.\n'
-  elif [[ "$plan_type" == "normal" && -n "$clock_out_earliest" ]]; then
-    # 1 to 5 minutes after the full shift, inside the flexible hours, and far
-    # enough ahead for cron to pick the entry up.
+  elif [[ -n "$clock_out_earliest" ]]; then
+    # 1 to 5 minutes after clockOutEarliest (a full shift after the actual or
+    # planned clock-in; on an afternoon leave, when it begins), inside the
+    # flexible hours, and far enough ahead for cron to pick the entry up.
     earliest_epoch=$(date -d "$clock_out_earliest" +%s)
     due_epoch=$((earliest_epoch + 60 + RANDOM % 241))
     limit_epoch=$(($(date -d "$FLEX_CLOCK_OUT_END" +%s) - 60))
@@ -66,11 +82,10 @@ if [[ "${1:-}" != "--next-day" ]] &&
       due_epoch=$soonest_epoch
     fi
     clock_out_time=$(minutes_of "$(date -d "@$((due_epoch + 59))" +%H:%M)")
-    printf 'Clocked in already; clock-out follows a full shift after it.\n'
+    printf 'Clock-out set from today'"'"'s plan.\n'
   elif [[ "$plan_type" == "normal" ]] && ((current_time < clock_in_time)); then
     printf 'Not clocked in yet; the regular times apply.\n'
   else
-    # Leave days get their own entries below; this one stays out of the way.
     clock_out_time=$latest_clock_out_time
     printf 'Clock-out set to the latest time.\n'
   fi

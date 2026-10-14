@@ -51,7 +51,10 @@ Random times stay inside both the flexible hours and the margins above:
   5-25 minute lead does not fit, the time is random between the opening and the
   minute before work resumes. If nothing is left, the run starts 2 minutes
   early, finishes its checks, and punches exactly as the hours open.
-- A clock-out delay is cut short where the flexible clock-out hours close.
+- A clock-out is never skipped for landing after the flexible clock-out hours
+  close — a full shift is always honored. Only the random 1-5 minute delay
+  added after it is cut short there; with no room left, clock-out happens
+  right at the full-shift moment with no added delay.
 
 Leave that reaches into the flexible hours means you are away for that half of
 the day, and an existing clock-in is looked at first:
@@ -72,9 +75,9 @@ Scheduled runs skip, or fail without punching, when:
 | The punch already exists | `already-clocked-in`, `already-clocked-out` |
 | Clock-out without a clock-in | `no-clock-in-record` |
 | A leave-day punch comes after its planned time | `planned-time-missed` |
-| A normal-day clock-in would come after the flexible clock-in hours; the full day would end after the flexible clock-out hours; a clock-out is triggered after they close | `outside-flexible-hours` |
+| A normal-day clock-in would come after the flexible clock-in hours close | `outside-flexible-hours` |
 | Holiday or full-day leave with a clock-in already made; clock-in too late for leave that ends the day | `no-plan-for-day` |
-| The schedule cannot be read, the shift length differs from `punch.conf`, a leave sheet has an unreadable time range, or the settings are invalid | `ERROR` |
+| The schedule cannot be read, a leave sheet has an unreadable time range, or the settings are invalid | `ERROR` |
 | The site reports the current IP is not allowed, or expects the other punch type | `ERROR` |
 
 A punch that is only too early is not made either (`not-due`), but it is
@@ -101,11 +104,14 @@ entries untouched:
 - The clock-in and clock-out minutes are random. After each scheduled clock-out
   the wrapper installs new ones for the next working day.
 - Running `cron:install` by hand during a working day reads the plan for
-  today, because the new clock-in minute no longer matches when the day
-  actually started. With a clock-in already made, clock-out is set 1 to 5
-  minutes after a full shift from it; on a leave day the one-off entries below
-  are added. If the plan cannot be read, clock-out is set to the latest regular
-  time.
+  today. With a clock-in already made, the written clock-in entry is set to
+  match it (today's punch already happened either way, but this keeps the
+  entry from looking unrelated to it) and clock-out is set 1 to 5 minutes
+  after `clockOutEarliest`. Not clocked in yet on a leave day, the written
+  clock-in entry comes from the plan's own window instead of the regular
+  shift-start formula. Either way, the one-off entries below are also added
+  on a leave day. If the plan cannot be read, clock-out is set to the latest
+  regular time.
 - The `plan` entry runs half an hour before the flexible clock-in hours open.
 
 When the regular times do not fit a day, a one-off entry for that date is added
@@ -127,9 +133,11 @@ still going exits without doing anything.
 
 ## Why the shift comes from punch.conf
 
-The site moves a day's shift to the actual clock-in minute once you have clocked
-in, so its shift times cannot be relied on. Only the shift length is compared
-with `punch.conf`, and a different length is refused.
+The site moves a day's shift to the actual clock-in minute once you have
+clocked in, so its shift times cannot be relied on; `punch.conf`'s shift is
+used instead. Its length is compared with the site's for a sanity check, but
+a difference only logs a warning — `punch.conf` is always what's actually
+punched by, whether its shift is longer or shorter than the site's.
 
 ## Limitations
 

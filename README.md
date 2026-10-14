@@ -75,8 +75,10 @@ changing it. An invalid setting stops everything until it is fixed.
 | Leave in the afternoon | Early enough for a full day | When the leave starts |
 
 Scheduled runs skip the punch rather than guess: a punch is never made twice,
-never overwritten, and never made at a time that would leave the day short or
-fall outside the flexible hours. The log says why, and you punch by hand.
+never overwritten, and a clock-in is never made outside the flexible hours.
+A clock-out always honors a full shift even past them — only its small random
+delay is capped there. The log says why a punch was skipped, and you punch by
+hand.
 
 Details, examples and the schedule itself: [docs/rules.md](docs/rules.md).
 

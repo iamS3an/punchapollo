@@ -135,6 +135,7 @@ async function main() {
           scheduled: SCHEDULED,
           hasClockIn: punches.hasClockIn,
           hasClockOut: punches.hasClockOut,
+          clockInAt: punches.hasClockIn ? isoTime(punches.clockInAt) : null,
           clockInWindow: plan.clockIn
             ? {
                 earliest: isoTime(plan.clockIn.earliest),
@@ -216,10 +217,9 @@ async function main() {
         });
         return;
       }
-      if (plan.clockOutEarliest > plan.latestPunch || now > plan.latestPunch) {
-        printSkipped(REQUESTED_ACTION, workRecord.date, "outside-flexible-hours");
-        return;
-      }
+      // No upper bound here: a full shift is always honored even past
+      // FLEX_CLOCK_OUT_END. The flexible hours only shape pickClockOutTime's
+      // random delay, which already clamps itself to that end.
       if (now < plan.clockOutEarliest) {
         printSkipped(REQUESTED_ACTION, workRecord.date, "not-due", {
           dueAt: isoTime(pickClockOutTime(plan, now))
