@@ -175,6 +175,16 @@ npm run session:login
 An Edge window opens on the sign-in page. The user signs in there by hand.
 Expect `authenticated: true` in the output.
 
+`PUNCH_METHOD` defaults to `ip` (checks this computer's network address, like
+the web page) and needs nothing further. Only if the user explicitly asks for
+GPS-based punching instead (sends the office's own registered position, like
+the phone app — not this computer's location): run `npm run location:set`,
+which lists their account's punch locations and writes the one they pick
+into `punch.conf` as `GPS_LOCATION_ID`, along with `PUNCH_METHOD=gps` unless
+it is already `auto`. `auto` punches by `gps` and falls back to `ip` only
+when the `gps` punch was never sent or was refused — mention it as an option
+but don't set it yourself unless asked, same as `gps`.
+
 ### 9. Automatic sign-in — default is to skip this
 
 `AUTO_SSO` is off by default and the install is complete without it; move on

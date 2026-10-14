@@ -24,6 +24,13 @@ if [[ "$AUTO_SSO" == "on" ]]; then
 else
   printf 'Automatic sign-in     off (an expired session waits for you to sign in)\n'
 fi
+if [[ "$PUNCH_METHOD" == "gps" ]]; then
+  printf 'Punch method          gps (location %s'"'"'s registered position)\n' "$GPS_LOCATION_ID"
+elif [[ "$PUNCH_METHOD" == "auto" ]]; then
+  printf 'Punch method          auto (gps at location %s, ip when gps is not made)\n' "$GPS_LOCATION_ID"
+else
+  printf 'Punch method          ip (the site checks the network address)\n'
+fi
 printf 'Shift                 %s-%s (%d h %02d min)\n' "$SHIFT_START" "$SHIFT_END" $((shift_length / 60)) $((shift_length % 60))
 printf 'Flexible clock-in     %s-%s\n' "$FLEX_CLOCK_IN_START" "$FLEX_CLOCK_IN_END"
 printf 'Flexible clock-out    %s-%s\n' "$FLEX_CLOCK_OUT_START" "$FLEX_CLOCK_OUT_END"

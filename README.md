@@ -45,6 +45,8 @@ Every scheduled run is recorded in `logs/punch.log`.
 | `SIGN_IN_URL` | The address of the sign-in page, without its last part (`/Login`) |
 | `AUTO_SSO` | When the session has expired: `off` waits for you to sign in, `on` signs in by itself |
 | `SSO_PROVIDER`, `SSO_DOMAIN`, `SSO_ACCOUNT` | For `AUTO_SSO=on` only. The provider must be `Microsoft` |
+| `PUNCH_METHOD` | How a punch is made: `ip` (the network address is checked, like the web page), `gps` (the office's registered position is sent, like the phone app; where this computer is, is not checked) or `auto` (`gps`, and `ip` whenever the `gps` punch was not made) |
+| `GPS_LOCATION_ID` | For `gps` and `auto`. Your office's punch location; `npm run location:set` picks it |
 | `SHIFT_START`, `SHIFT_END` | Regular shift, e.g. `09:00` and `18:00` |
 | `FLEX_CLOCK_IN_START`, `FLEX_CLOCK_IN_END` | Flexible clock-in hours |
 | `FLEX_CLOCK_OUT_START`, `FLEX_CLOCK_OUT_END` | Flexible clock-out hours |
@@ -61,6 +63,7 @@ changing it. An invalid setting stops everything until it is fixed.
 | `npm run clock:in` / `clock:out` | Punches now, by hand |
 | `npm run cron:install` | Installs or refreshes the schedule |
 | `npm run config:show` | Shows the settings and the installed schedule |
+| `npm run location:set` | Lists this account's punch locations and sets `GPS_LOCATION_ID` to the one you pick, with `PUNCH_METHOD=gps` unless it is `auto` |
 | `npm run session:login` | Reuses the saved session, or signs in if it has expired |
 | `npm run password:set` / `totp:set` | Stores the Microsoft password / authenticator secret for `AUTO_SSO=on` |
 | `npm run session:test` | Tests `AUTO_SSO` (automatic sign-in) from a clean browser; punches nothing |
@@ -102,6 +105,8 @@ punch.
 |---|---|
 | `Cannot connect to Edge` | DevTools (F12) is open in the dedicated Edge window; close it |
 | `Current IP is not allowed for web punching` | The computer is not on a network the site accepts |
+| `Punch API returned ...` with `gps` | The site refused the GPS punch; with `auto` the IP punch is tried next |
+| `The punch needs a reason ...` | A GPS punch was too early or too late for the day's overtime limits, and the site offered no "no overtime" answer |
 | `Login timed out` | The session expired and nobody signed in, or a stored value was rejected; run `npm run session:login` |
 | `Windows Node.js was not found` | Node.js is missing on the Windows side |
 | `punch.conf: ...` | A setting is invalid; `npm run config:show` repeats the message |

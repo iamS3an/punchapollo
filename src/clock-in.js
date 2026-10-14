@@ -7,12 +7,12 @@ import {
 } from "./day-plan.js";
 import { loadConfig } from "./config.js";
 import { dayOffReason, getSchedule } from "./leave-check.js";
-import { punchByApi } from "./punch-api.js";
+import { punchByApi, punchByGps } from "./punch-api.js";
 import { signIn } from "./sso-login.js";
 import { getTodayWorkRecord } from "./work-record-check.js";
 
 const CDP_URL = process.env.EDGE_CDP_URL ?? "http://localhost:9222";
-const { siteUrl: APP_URL, siteOrigin: APP_ORIGIN } = loadConfig();
+const { siteUrl: APP_URL, siteOrigin: APP_ORIGIN, punchMethod: PUNCH_METHOD, gpsLocationId } = loadConfig();
 const LOGIN_TIMEOUT_MS = numberFromEnv("LOGIN_TIMEOUT_MS", 10 * 60 * 1000);
 const PAGE_LOAD_TIMEOUT_MS = numberFromEnv("PAGE_LOAD_TIMEOUT_MS", 90_000);
 const SUBMIT_TIMEOUT_MS = numberFromEnv("SUBMIT_TIMEOUT_MS", 60_000);
@@ -77,6 +77,14 @@ async function runWithAuthenticationRecovery(page, operation) {
     await signIn(page, LOGIN_TIMEOUT_MS);
     return operation();
   }
+}
+
+// A GPS punch that was never sent, or that the site refused outright, leaves
+// nothing recorded; anything less certain must not be followed by another punch.
+function gpsPunchNotMade(error) {
+  if (error.code === "AUTH_REQUIRED") return false;
+  if (!error.submitted) return true;
+  return error.code === "API_ERROR" && error.status >= 400 && error.status < 500;
 }
 
 function printSkipped(action, date, reason, details = {}) {
@@ -229,9 +237,31 @@ async function main() {
     }
   }
 
-  const result = await runWithAuthenticationRecovery(page, () =>
-    punchByApi(page, REQUESTED_ACTION, SUBMIT_TIMEOUT_MS)
-  );
+  const punchByIp = () =>
+    runWithAuthenticationRecovery(page, () => punchByApi(page, REQUESTED_ACTION, SUBMIT_TIMEOUT_MS));
+  let result;
+  if (PUNCH_METHOD === "ip") {
+    result = await punchByIp();
+  } else {
+    try {
+      result = await runWithAuthenticationRecovery(page, () =>
+        punchByGps(page, REQUESTED_ACTION, gpsLocationId, SUBMIT_TIMEOUT_MS)
+      );
+    } catch (error) {
+      if (PUNCH_METHOD !== "auto" || !gpsPunchNotMade(error)) throw error;
+      console.error(`GPS punch was not made (${error.message}); punching by IP instead.`);
+      // A refused punch records nothing, but a second punch is only made
+      // once the record confirms it.
+      const record = await runWithAuthenticationRecovery(page, () =>
+        getTodayWorkRecord(page, PAGE_LOAD_TIMEOUT_MS)
+      );
+      if (REQUESTED_ACTION === "clock-in" ? record.hasClockIn : record.hasClockOut) {
+        printSkipped(REQUESTED_ACTION, record.date, `already-${REQUESTED_ACTION === "clock-in" ? "clocked-in" : "clocked-out"}`);
+        return;
+      }
+      result = await punchByIp();
+    }
+  }
   console.log(JSON.stringify({ ...result, skipped: false }, null, 2));
 }
 

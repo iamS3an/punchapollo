@@ -19,6 +19,8 @@ while IFS= read -r config_line || [[ -n "$config_line" ]]; do
   if [[ "$config_line" =~ ^($config_time_keys)=($config_time)$ ]] ||
     [[ "$config_line" =~ ^(SITE_URL|SIGN_IN_URL)=(https://$config_host(/[A-Za-z0-9._~/-]*)?)$ ]] ||
     [[ "$config_line" =~ ^(AUTO_SSO)=(on|off)$ ]] ||
+    [[ "$config_line" =~ ^(PUNCH_METHOD)=(ip|gps|auto)$ ]] ||
+    [[ "$config_line" =~ ^(GPS_LOCATION_ID)=([0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})$ ]] ||
     [[ "$config_line" =~ ^(SSO_PROVIDER)=([A-Za-z]+)$ ]] ||
     [[ "$config_line" =~ ^(SSO_DOMAIN)=($config_host)$ ]] ||
     [[ "$config_line" =~ ^(SSO_ACCOUNT)=([A-Za-z0-9._%+-]+@$config_host)$ ]]; then
@@ -35,8 +37,15 @@ if [[ "${AUTO_SSO:-}" == "on" ]]; then
   config_sso_keys="SSO_PROVIDER SSO_DOMAIN SSO_ACCOUNT"
 fi
 
+# Older files have no PUNCH_METHOD; they keep punching by network address.
+PUNCH_METHOD="${PUNCH_METHOD:-ip}"
+config_gps_keys=""
+if [[ "$PUNCH_METHOD" != "ip" ]]; then
+  config_gps_keys="GPS_LOCATION_ID"
+fi
+
 config_missing=""
-for config_key in SITE_URL SIGN_IN_URL AUTO_SSO $config_sso_keys ${config_time_keys//|/ }; do
+for config_key in SITE_URL SIGN_IN_URL AUTO_SSO $config_sso_keys $config_gps_keys ${config_time_keys//|/ }; do
   if [[ -z "${!config_key:-}" ]]; then
     config_missing+="${config_missing:+, }$config_key"
   fi
@@ -68,6 +77,12 @@ if [[ "$AUTO_SSO" == "on" ]] &&
   exit 1
 fi
 shopt -u nocasematch
+
+# The all-zero id is the example's placeholder, which the site lists as "other".
+if [[ "$PUNCH_METHOD" != "ip" && "$GPS_LOCATION_ID" =~ ^[0-]+$ ]]; then
+  printf 'punch.conf: set GPS_LOCATION_ID to your office'"'"'s punch location.\n' >&2
+  exit 1
+fi
 
 # Minutes since midnight of an HH:MM time.
 minutes_of() {

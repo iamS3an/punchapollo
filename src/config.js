@@ -25,6 +25,8 @@ const TEXT_KEYS = {
 };
 const TIME_VALUE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const SWITCH_VALUE = /^(on|off)$/;
+const PUNCH_METHOD_VALUE = /^(ip|gps|auto)$/;
+const LOCATION_ID_VALUE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function minutesOf(time) {
   const [hours, minutes] = time.split(":").map(Number);
@@ -48,7 +50,11 @@ function parseConfig(text) {
           ? URL_VALUE
           : key === "AUTO_SSO"
             ? SWITCH_VALUE
-            : null);
+            : key === "PUNCH_METHOD"
+              ? PUNCH_METHOD_VALUE
+              : key === "GPS_LOCATION_ID"
+                ? LOCATION_ID_VALUE
+                : null);
     if (separator < 1 || !pattern || !pattern.test(value)) {
       throw new Error(`punch.conf: cannot read "${trimmed}".`);
     }
@@ -57,7 +63,15 @@ function parseConfig(text) {
 
   // The SSO values are only needed, and only checked, for automatic sign-in.
   const autoSso = values.AUTO_SSO === "on";
-  const required = [...URL_KEYS, "AUTO_SSO", ...(autoSso ? Object.keys(TEXT_KEYS) : []), ...TIME_KEYS];
+  // Older files have no PUNCH_METHOD; they keep punching by network address.
+  const punchMethod = values.PUNCH_METHOD ?? "ip";
+  const required = [
+    ...URL_KEYS,
+    "AUTO_SSO",
+    ...(autoSso ? Object.keys(TEXT_KEYS) : []),
+    ...(punchMethod !== "ip" ? ["GPS_LOCATION_ID"] : []),
+    ...TIME_KEYS
+  ];
   const missing = required.filter((key) => !(key in values));
   if (missing.length > 0) throw new Error(`punch.conf: missing ${missing.join(", ")}.`);
   if (URL_KEYS.some((key) => /^https:\/\/([^/]+\.)?example\.com(\/|$)/i.test(values[key]))) {
@@ -71,6 +85,11 @@ function parseConfig(text) {
     (/(^|[@.])example\.com$/i.test(values.SSO_DOMAIN) || /[@.]example\.com$/i.test(values.SSO_ACCOUNT))
   ) {
     throw new Error("punch.conf: set SSO_DOMAIN and SSO_ACCOUNT to your own values.");
+  }
+
+  // The all-zero id is the example's placeholder, which the site lists as "other".
+  if (punchMethod !== "ip" && /^[0-]+$/.test(values.GPS_LOCATION_ID)) {
+    throw new Error("punch.conf: set GPS_LOCATION_ID to your office's punch location.");
   }
 
   const m = Object.fromEntries(TIME_KEYS.map((key) => [key, minutesOf(values[key])]));
@@ -101,6 +120,8 @@ function parseConfig(text) {
           account: values.SSO_ACCOUNT
         }
       : { auto: false },
+    punchMethod,
+    gpsLocationId: punchMethod !== "ip" ? values.GPS_LOCATION_ID : null,
     shift: { start: values.SHIFT_START, end: values.SHIFT_END },
     shiftLengthMs: (m.SHIFT_END - m.SHIFT_START) * 60_000,
     flexClockIn: { start: values.FLEX_CLOCK_IN_START, end: values.FLEX_CLOCK_IN_END },
