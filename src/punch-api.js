@@ -149,17 +149,24 @@ async function clockInOut(page, action, { method, functionCode, body }, timeoutM
   };
 }
 
-export function punchByApi(page, action, timeoutMs) {
-  return clockInOut(
+// The web page's punch. With a reason it switches to the same PascalCase
+// fields as the phone app, keeping isOverride as it is.
+export async function punchByApi(page, action, timeoutMs) {
+  const reason = await noOvertimeReason(page, ACTION_TYPES[action], Date.now(), timeoutMs);
+  const result = await clockInOut(
     page,
     action,
     {
       method: "ip",
       functionCode: "PunchCard",
-      body: (attendanceType) => ({ attendanceType, isOverride: false })
+      body: (attendanceType) =>
+        reason.CheckInPersonalReasonTypeId
+          ? { AttendanceType: attendanceType, isOverride: false, ...reason }
+          : { attendanceType, isOverride: false }
     },
     timeoutMs
   );
+  return { ...result, reason: reason.CheckInPersonalReason ?? null };
 }
 
 // The account's configured punch locations, as the site's phone app would
@@ -249,10 +256,10 @@ async function fetchGpsLocation(page, locationId, timeoutMs) {
   };
 }
 
-// The phone app asks for a reason when a clock-in comes too early or a
-// clock-out too late for the day's extend-work-hour rule, and sends the answer
-// with the punch. Overtime is always applied for separately, so the answer
-// sent here is always the one meaning no overtime is applied for.
+// The web page and the phone app both ask for a reason when a clock-in comes
+// too early or a clock-out too late for the day's extend-work-hour rule, and
+// send the answer with the punch. Overtime is always applied for separately,
+// so the answer sent here is always the one meaning no overtime is applied for.
 async function noOvertimeReason(page, attendanceType, now, timeoutMs) {
   const rule = await getAppData(
     page,
@@ -298,8 +305,6 @@ async function noOvertimeReason(page, attendanceType, now, timeoutMs) {
     CheckInPersonalReason: reason.Name,
     CheckInPersonalReasonTypeId: reason.CheckInPersonalReasonTypeId,
     CheckInTimeoutType: "Personal",
-    // PostponeWork is what the phone app sent for a late clock-out;
-    // AdvanceWork is assumed to be its early clock-in counterpart.
     ExtendWorkHourType: early ? "AdvanceWork" : "PostponeWork"
   };
 }

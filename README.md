@@ -106,7 +106,7 @@ punch.
 | `Cannot connect to Edge` | DevTools (F12) is open in the dedicated Edge window; close it |
 | `Current IP is not allowed for web punching` | The computer is not on a network the site accepts |
 | `Punch API returned ...` with `gps` | The site refused the GPS punch; with `auto` the IP punch is tried next |
-| `The punch needs a reason ...` | A GPS punch was too early or too late for the day's overtime limits, and the site offered no "no overtime" answer |
+| `The punch needs a reason ...` | The punch was too early or too late for the day's overtime limits, and the site offered no "no overtime" answer |
 | `Login timed out` | The session expired and nobody signed in, or a stored value was rejected; run `npm run session:login` |
 | `Windows Node.js was not found` | Node.js is missing on the Windows side |
 | `punch.conf: ...` | A setting is invalid; `npm run config:show` repeats the message |
