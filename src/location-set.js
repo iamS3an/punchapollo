@@ -6,8 +6,10 @@ import { createInterface } from "node:readline/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig } from "./config.js";
+import { saveSessionFromPage } from "./session-store.js";
 import { isAuthenticated, signIn } from "./sso-login.js";
 import { fetchPunchLocations } from "./punch-api.js";
+import { edgeTransport } from "./transport.js";
 
 const CDP_URL = process.env.EDGE_CDP_URL ?? "http://localhost:9222";
 const LOGIN_TIMEOUT_MS = Number(process.env.LOGIN_TIMEOUT_MS ?? 15 * 60 * 1000);
@@ -31,8 +33,10 @@ if (!page.url().startsWith(APP_ORIGIN)) {
 }
 
 if (!(await isAuthenticated(page))) await signIn(page, LOGIN_TIMEOUT_MS);
+// Saved here so clock:plan/in/out can skip Edge entirely until it expires.
+await saveSessionFromPage(page);
 
-const locations = (await fetchPunchLocations(page, SUBMIT_TIMEOUT_MS)).filter(
+const locations = (await fetchPunchLocations(edgeTransport(page), SUBMIT_TIMEOUT_MS)).filter(
   (location) => location.id !== OTHER_LOCATION_ID
 );
 if (locations.length === 0) {

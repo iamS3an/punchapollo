@@ -5,3 +5,6 @@ logs/
 
 # Personal settings; start from punch.conf.example.
 punch.conf
+
+# The saved session cookie; npm run session:login or a clock:* run recreates it.
+.session.json

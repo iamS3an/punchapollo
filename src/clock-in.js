@@ -1,4 +1,8 @@
 import { chromium } from "playwright-core";
+import { execFile } from "node:child_process";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import {
   computeDayPlan,
   EXACT_PUNCH_MAX_WAIT_MS,
@@ -8,14 +12,19 @@ import {
 import { loadConfig } from "./config.js";
 import { dayOffReason, getSchedule } from "./leave-check.js";
 import { punchByApi, punchByGps } from "./punch-api.js";
-import { signIn } from "./sso-login.js";
+import { clearSession, loadSession, saveSessionFromPage } from "./session-store.js";
+import { isAuthenticated, signIn } from "./sso-login.js";
+import { cookieTransport } from "./transport.js";
 import { getTodayWorkRecord } from "./work-record-check.js";
 
+const execFileAsync = promisify(execFile);
+const PROJECT_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const CDP_URL = process.env.EDGE_CDP_URL ?? "http://localhost:9222";
 const { siteUrl: APP_URL, siteOrigin: APP_ORIGIN, punchMethod: PUNCH_METHOD, gpsLocationId } = loadConfig();
 const LOGIN_TIMEOUT_MS = numberFromEnv("LOGIN_TIMEOUT_MS", 10 * 60 * 1000);
 const PAGE_LOAD_TIMEOUT_MS = numberFromEnv("PAGE_LOAD_TIMEOUT_MS", 90_000);
 const SUBMIT_TIMEOUT_MS = numberFromEnv("SUBMIT_TIMEOUT_MS", 60_000);
+const EDGE_READY_TIMEOUT_MS = numberFromEnv("EDGE_READY_TIMEOUT_MS", 60_000);
 const REQUESTED_ACTION = process.env.PUNCH_ACTION;
 // Scheduled runs wait for the planned time; manual runs punch immediately.
 const SCHEDULED = process.env.PUNCH_SCHEDULED === "1";
@@ -37,6 +46,37 @@ function numberFromEnv(name, fallback) {
 
 function sleep(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function edgeIsReady() {
+  try {
+    const response = await fetch(`${CDP_URL}/json/version`, { signal: AbortSignal.timeout(3_000) });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+// Starts the dedicated Edge profile if it is not already running. This is
+// the only reason signing in ever needs the browser.
+async function ensureEdgeRunning() {
+  if (await edgeIsReady()) return;
+  console.error("Edge DevTools is unavailable; starting the dedicated Edge profile.");
+  await execFileAsync("powershell.exe", [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    join(PROJECT_ROOT, "start-edge.ps1"),
+    "-Url",
+    APP_URL
+  ]);
+  const deadline = Date.now() + EDGE_READY_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    if (await edgeIsReady()) return;
+    await sleep(2_000);
+  }
+  throw new Error(`Edge did not become ready within ${Math.round(EDGE_READY_TIMEOUT_MS / 1000)} seconds.`);
 }
 
 async function connectToEdge() {
@@ -69,14 +109,32 @@ async function loadApp(page) {
   throw new Error(`The site did not load after 3 attempts: ${lastError.message}`);
 }
 
-async function runWithAuthenticationRecovery(page, operation) {
+// The only path that ever opens Edge: makes sure it is running, reuses or
+// makes the sign-in, and saves the cookie a direct request needs to act as
+// that page from then on.
+async function signInAndSaveSession() {
+  await ensureEdgeRunning();
+  const browser = await connectToEdge();
   try {
-    return await operation();
-  } catch (error) {
-    if (error.code !== "AUTH_REQUIRED") throw error;
-    await signIn(page, LOGIN_TIMEOUT_MS);
-    return operation();
+    const context = browser.contexts()[0];
+    if (!context) throw new Error("Edge has no browser context.");
+    const page =
+      context.pages().find((candidate) => candidate.url().startsWith(APP_ORIGIN)) ??
+      (await context.newPage());
+    if (!page.url().startsWith(APP_ORIGIN)) await loadApp(page);
+    if (!(await isAuthenticated(page))) await signIn(page, LOGIN_TIMEOUT_MS);
+    return await saveSessionFromPage(page);
+  } finally {
+    // Disconnects this CDP connection only; Edge itself keeps running.
+    await browser.close().catch(() => {});
   }
+}
+
+// A cookie-only transport, signing in through Edge first when there is no
+// saved session yet.
+async function getTransport() {
+  const saved = loadSession();
+  return cookieTransport(saved ?? (await signInAndSaveSession()));
 }
 
 // A GPS punch that was never sent, or that the site refused outright, leaves
@@ -99,29 +157,29 @@ function isoTime(milliseconds) {
 }
 
 async function main() {
-  const browser = await connectToEdge();
-  const context = browser.contexts()[0];
-  if (!context) throw new Error("Edge has no browser context.");
+  let transport = await getTransport();
 
-  const page =
-    context.pages().find((candidate) => candidate.url().startsWith(APP_ORIGIN)) ??
-    (await context.newPage());
-
-  if (!page.url().startsWith(APP_ORIGIN)) {
-    await loadApp(page);
+  // A 401/403 means the saved cookie has expired: sign in again through
+  // Edge, save the fresh cookie, and retry only the operation that failed -
+  // every call after that reuses the new transport too.
+  async function withAuth(operation) {
+    try {
+      return await operation(transport);
+    } catch (error) {
+      if (error.code !== "AUTH_REQUIRED") throw error;
+      clearSession();
+      transport = cookieTransport(await signInAndSaveSession());
+      return operation(transport);
+    }
   }
 
-  const workRecord = await runWithAuthenticationRecovery(page, () =>
-    getTodayWorkRecord(page, PAGE_LOAD_TIMEOUT_MS)
-  );
+  const workRecord = await withAuth((t) => getTodayWorkRecord(t, PAGE_LOAD_TIMEOUT_MS));
   // Punch records only exist for today; another day is planned from scratch.
   const planDate = PLAN_DATE ?? workRecord.date;
   const punches =
     planDate === workRecord.date ? workRecord : { hasClockIn: false, hasClockOut: false, clockInAt: null };
   const loadPlan = async () => {
-    const schedule = await runWithAuthenticationRecovery(page, () =>
-      getSchedule(page, PAGE_LOAD_TIMEOUT_MS, planDate)
-    );
+    const schedule = await withAuth((t) => getSchedule(t, PAGE_LOAD_TIMEOUT_MS, planDate));
     const offReason = dayOffReason(schedule);
     const plan = offReason ? { type: "off" } : computeDayPlan({ ...schedule, clockInAt: punches.clockInAt });
     return { plan, offReason: offReason ?? (plan.type === "off" ? "leave-detected" : null) };
@@ -237,24 +295,19 @@ async function main() {
     }
   }
 
-  const punchByIp = () =>
-    runWithAuthenticationRecovery(page, () => punchByApi(page, REQUESTED_ACTION, SUBMIT_TIMEOUT_MS));
+  const punchByIp = () => withAuth((t) => punchByApi(t, REQUESTED_ACTION, SUBMIT_TIMEOUT_MS));
   let result;
   if (PUNCH_METHOD === "ip") {
     result = await punchByIp();
   } else {
     try {
-      result = await runWithAuthenticationRecovery(page, () =>
-        punchByGps(page, REQUESTED_ACTION, gpsLocationId, SUBMIT_TIMEOUT_MS)
-      );
+      result = await withAuth((t) => punchByGps(t, REQUESTED_ACTION, gpsLocationId, SUBMIT_TIMEOUT_MS));
     } catch (error) {
       if (PUNCH_METHOD !== "auto" || !gpsPunchNotMade(error)) throw error;
       console.error(`GPS punch was not made (${error.message}); punching by IP instead.`);
       // A refused punch records nothing, but a second punch is only made
       // once the record confirms it.
-      const record = await runWithAuthenticationRecovery(page, () =>
-        getTodayWorkRecord(page, PAGE_LOAD_TIMEOUT_MS)
-      );
+      const record = await withAuth((t) => getTodayWorkRecord(t, PAGE_LOAD_TIMEOUT_MS));
       if (REQUESTED_ACTION === "clock-in" ? record.hasClockIn : record.hasClockOut) {
         printSkipped(REQUESTED_ACTION, record.date, `already-${REQUESTED_ACTION === "clock-in" ? "clocked-in" : "clocked-out"}`);
         return;
@@ -265,10 +318,22 @@ async function main() {
   console.log(JSON.stringify({ ...result, skipped: false }, null, 2));
 }
 
+// A safety net: nothing here is expected to leave a handle open once main()
+// settles, but if one ever does, cron must not hang forever behind it.
+// Armed only now, not at module load, so it can never cut off main() itself
+// still running (a leave day's exact-time wait, a slow sign-in, a slow
+// punch). Unref'd, so it never keeps the process alive by itself, and 15s is
+// long past undici's own idle-socket timeout, so it can't race the same way
+// process.exit() did.
+function finish(code) {
+  process.exitCode = code;
+  setTimeout(() => process.exit(code), 15_000).unref();
+}
+
 main().then(
-  () => process.exit(0),
+  () => finish(0),
   (error) => {
     console.error(`ERROR: ${error.message}`);
-    process.exit(1);
+    finish(1);
   }
 );

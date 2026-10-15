@@ -2,6 +2,7 @@
 // saved one, and signs in only when it has expired.
 import { chromium } from "playwright-core";
 import { loadConfig } from "./config.js";
+import { saveSessionFromPage } from "./session-store.js";
 import { isAuthenticated, signIn } from "./sso-login.js";
 
 const CDP_URL = process.env.EDGE_CDP_URL ?? "http://localhost:9222";
@@ -23,6 +24,8 @@ if (!page.url().startsWith(APP_ORIGIN)) {
 
 const sessionReused = await isAuthenticated(page);
 if (!sessionReused) await signIn(page, LOGIN_TIMEOUT_MS);
+// Saved here so clock:plan/in/out can skip Edge entirely until it expires.
+await saveSessionFromPage(page);
 
 console.log(JSON.stringify({ authenticated: true, sessionReused, cdpUrl: CDP_URL }, null, 2));
 process.exit(0);

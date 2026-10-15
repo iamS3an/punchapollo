@@ -9,37 +9,12 @@ function apiError(message, code) {
   return error;
 }
 
-async function browserFetch(page, path, options, timeoutMs) {
-  return page.evaluate(
-    async ({ path, options, timeoutMs }) => {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-      try {
-        const response = await fetch(path, {
-          ...options,
-          credentials: "include",
-          signal: controller.signal
-        });
-        const text = await response.text();
-        let body;
-        try {
-          body = JSON.parse(text);
-        } catch {
-          body = { raw: text.slice(0, 500) };
-        }
-
-        return {
-          status: response.status,
-          url: response.url,
-          body
-        };
-      } finally {
-        clearTimeout(timer);
-      }
-    },
-    { path, options, timeoutMs }
-  );
+// A 200 with an unexpected shape could be a real API change or a WAF
+// challenge page; without this, cookieTransport's POST would log a message
+// that can't tell the two apart.
+function describeResponse(result) {
+  const detail = result.body?.raw ?? JSON.stringify(result.body);
+  return `status ${result.status}: ${String(detail).slice(0, 200)}`;
 }
 
 function validateResponse(result, operation) {
@@ -59,7 +34,7 @@ function validateResponse(result, operation) {
 
 // Both punch methods go through the same clockInOut API: it must be the one
 // this account uses, and must expect this punch, before anything is sent.
-async function clockInOut(page, action, { method, functionCode, body }, timeoutMs) {
+async function clockInOut(transport, action, { method, functionCode, body }, timeoutMs) {
   const attendanceType = ACTION_TYPES[action];
   if (!attendanceType) {
     throw new Error(`Unsupported API punch action: ${action}`);
@@ -74,8 +49,7 @@ async function clockInOut(page, action, { method, functionCode, body }, timeoutM
     functioncode: "PunchCard"
   };
 
-  const useNew = await browserFetch(
-    page,
+  const useNew = await transport.fetch(
     "/backend/platform-bff/api/clockInOut/useNew",
     { method: "GET", headers },
     timeoutMs
@@ -85,8 +59,7 @@ async function clockInOut(page, action, { method, functionCode, body }, timeoutM
     throw apiError("The account is not using the verified clockInOut API.", "UNSUPPORTED_API");
   }
 
-  const location = await browserFetch(
-    page,
+  const location = await transport.fetch(
     "/backend/platform-bff/api/clockInOut/location",
     { method: "GET", headers },
     timeoutMs
@@ -107,8 +80,7 @@ async function clockInOut(page, action, { method, functionCode, body }, timeoutM
 
   let punch;
   try {
-    punch = await browserFetch(
-      page,
+    punch = await transport.fetch(
       `/backend/platform-bff/api/clockInOut/${method}`,
       {
         method: "POST",
@@ -131,7 +103,7 @@ async function clockInOut(page, action, { method, functionCode, body }, timeoutM
   try {
     validateResponse(punch, "Punch API");
     if (punch.body?.data?.punchType !== attendanceType) {
-      throw apiError("Punch API returned an unexpected punch type.", "INVALID_RESPONSE");
+      throw apiError(`Punch API returned an unexpected punch type (${describeResponse(punch)}).`, "INVALID_RESPONSE");
     }
   } catch (error) {
     error.submitted = true;
@@ -151,10 +123,10 @@ async function clockInOut(page, action, { method, functionCode, body }, timeoutM
 
 // The web page's punch. With a reason it switches to the same PascalCase
 // fields as the phone app, keeping isOverride as it is.
-export async function punchByApi(page, action, timeoutMs) {
-  const reason = await noOvertimeReason(page, ACTION_TYPES[action], Date.now(), timeoutMs);
+export async function punchByApi(transport, action, timeoutMs) {
+  const reason = await noOvertimeReason(transport, ACTION_TYPES[action], Date.now(), timeoutMs);
   const result = await clockInOut(
-    page,
+    transport,
     action,
     {
       method: "ip",
@@ -172,16 +144,15 @@ export async function punchByApi(page, action, timeoutMs) {
 // The account's configured punch locations, as the site's phone app would
 // list them (one is the all-zero "other" id, and one is the web page's own
 // location rather than a real office; exclude or recognize those yourself).
-export async function fetchPunchLocations(page, timeoutMs) {
-  const locations = await browserFetch(
-    page,
+export async function fetchPunchLocations(transport, timeoutMs) {
+  const locations = await transport.fetch(
     "/backend/pt/api/locations/EnableList",
     { method: "GET", headers: { accept: "*/*", "accept-language": "en-us" } },
     timeoutMs
   );
   validateResponse(locations, "Punch location list");
   if (!Array.isArray(locations.body?.Data)) {
-    throw apiError("Punch location list returned an unexpected structure.", "INVALID_RESPONSE");
+    throw apiError(`Punch location list returned an unexpected structure (${describeResponse(locations)}).`, "INVALID_RESPONSE");
   }
   return locations.body.Data.map((item) => ({
     id: item.PunchesLocationId,
@@ -192,9 +163,8 @@ export async function fetchPunchLocations(page, timeoutMs) {
 
 // The lookups the site's phone app makes before a GPS punch answer in
 // {Meta, Data}; their labels are read in the language the app uses.
-async function getAppData(page, path, functionCode, operation, timeoutMs) {
-  const result = await browserFetch(
-    page,
+async function getAppData(transport, path, functionCode, operation, timeoutMs) {
+  const result = await transport.fetch(
     path,
     {
       method: "GET",
@@ -210,15 +180,15 @@ async function getAppData(page, path, functionCode, operation, timeoutMs) {
   );
   validateResponse(result, operation);
   if (result.body?.Data === undefined || result.body.Data === null) {
-    throw apiError(`${operation} returned an unexpected structure.`, "INVALID_RESPONSE");
+    throw apiError(`${operation} returned an unexpected structure (${describeResponse(result)}).`, "INVALID_RESPONSE");
   }
   return result.body.Data;
 }
 
 // The location as the phone app sees it, with the coordinates registered for it.
-async function fetchGpsLocation(page, locationId, timeoutMs) {
+async function fetchGpsLocation(transport, locationId, timeoutMs) {
   const gpsType = await getAppData(
-    page,
+    transport,
     "/backend/pt/api/checkIn/mUseLocationType",
     "PunchCard",
     "GPS punch type",
@@ -229,7 +199,7 @@ async function fetchGpsLocation(page, locationId, timeoutMs) {
   }
 
   const locations = await getAppData(
-    page,
+    transport,
     `/backend/pt/api/locations/AppEnableList?gpstype=${encodeURIComponent(gpsType)}`,
     "PunchCard",
     "GPS punch location list",
@@ -260,9 +230,9 @@ async function fetchGpsLocation(page, locationId, timeoutMs) {
 // too early or a clock-out too late for the day's extend-work-hour rule, and
 // send the answer with the punch. Overtime is always applied for separately,
 // so the answer sent here is always the one meaning no overtime is applied for.
-async function noOvertimeReason(page, attendanceType, now, timeoutMs) {
+async function noOvertimeReason(transport, attendanceType, now, timeoutMs) {
   const rule = await getAppData(
-    page,
+    transport,
     "/backend/pt/api/CheckInExtendWorkHourRule/GetWithReason",
     "AttendanceRules",
     "Extend-work-hour rule",
@@ -285,7 +255,7 @@ async function noOvertimeReason(page, attendanceType, now, timeoutMs) {
   if (!early && !late) return {};
 
   const labels = await getAppData(
-    page,
+    transport,
     "/backend/pt/api/label/form/checkin-matter",
     "PunchCard",
     "Punch reason labels",
@@ -313,12 +283,12 @@ async function noOvertimeReason(page, attendanceType, now, timeoutMs) {
 // registered for the location, as the app does, instead of being checked
 // against the network address like the web page's punch. Nothing here checks
 // where this computer actually is.
-export async function punchByGps(page, action, locationId, timeoutMs) {
-  const location = await fetchGpsLocation(page, locationId, timeoutMs);
-  const reason = await noOvertimeReason(page, ACTION_TYPES[action], Date.now(), timeoutMs);
+export async function punchByGps(transport, action, locationId, timeoutMs) {
+  const location = await fetchGpsLocation(transport, locationId, timeoutMs);
+  const reason = await noOvertimeReason(transport, ACTION_TYPES[action], Date.now(), timeoutMs);
 
   const result = await clockInOut(
-    page,
+    transport,
     action,
     {
       method: "gps",

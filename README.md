@@ -7,8 +7,9 @@ dedicated Microsoft Edge profile on Windows.
   shift later.
 - Holidays, rest days and leave are read from the site, and the punch times
   move with partial-day leave.
-- The saved sign-in session is reused. When it expires you sign in by hand, or
-  the run signs in through Microsoft SSO by itself if you turn that on.
+- The saved sign-in session is reused directly, without opening Edge. Only
+  once it expires does Edge open, to sign in by hand or through Microsoft SSO
+  by itself if you turn that on.
 - When the right time is in doubt, nothing is punched.
 
 ## Quick start
@@ -58,16 +59,28 @@ changing it. An invalid setting stops everything until it is fixed.
 
 ## Commands
 
+### Every day
+
 | Command | What it does |
 |---|---|
 | `npm run clock:plan` | Prints today's plan; punches nothing |
 | `npm run clock:in` / `clock:out` | Punches now, by hand |
-| `npm run cron:install` | Installs or refreshes the schedule |
 | `npm run config:show` | Shows the settings and the installed schedule |
-| `npm run location:set` | Lists this account's punch locations and sets `GPS_LOCATION_ID` to the one you pick, with `PUNCH_METHOD=gps` unless it is `auto` |
+
+### Setup
+
+| Command | What it does |
+|---|---|
 | `npm run session:login` | Reuses the saved session, or signs in if it has expired |
-| `npm run password:set` / `totp:set` | Stores the Microsoft password / authenticator secret for `AUTO_SSO=on` |
-| `npm run session:test` | Tests `AUTO_SSO` (automatic sign-in) from a clean browser; punches nothing |
+| `npm run location:set` | Lists this account's punch locations and sets `GPS_LOCATION_ID` to the one you pick, with `PUNCH_METHOD=gps` unless it is `auto` |
+| `npm run cron:install` | Installs or refreshes the schedule; run again after any `punch.conf` edit |
+
+### Automatic sign-in (`AUTO_SSO=on` only)
+
+| Command | What it does |
+|---|---|
+| `npm run password:set` / `totp:set` | Stores the Microsoft password / authenticator secret |
+| `npm run session:test` | Tests automatic sign-in from a clean browser; punches nothing |
 
 ## What it does each day
 

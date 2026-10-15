@@ -17,47 +17,32 @@ function apiError(message, code) {
   return error;
 }
 
-export async function getTodayWorkRecord(page, timeoutMs) {
+export async function getTodayWorkRecord(transport, timeoutMs) {
   const date = taipeiDate();
   const queryDate = date.replaceAll("-", "/");
-  const result = await page.evaluate(
-    async ({ queryDate, timeoutMs }) => {
-      const url = new URL("/backend/pt/api/checkinRecords/onOffWork", location.origin);
-      url.search = new URLSearchParams({
-        attendanceDateEnd: queryDate,
-        attendanceDateStart: queryDate,
-        attendanceType: "",
-        checkInWay: "workOnOff",
-        departmentId: "",
-        employeeId: "",
-        pageNumber: "1",
-        pageSize: "30",
-        punchesLocationId: ""
-      });
-
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
-      try {
-        const response = await fetch(url, {
-          credentials: "include",
-          headers: {
-            accept: "*/*",
-            actioncode: "Default",
-            "content-type": "application/json",
-            functioncode: "PersonalWorkRecords"
-          },
-          signal: controller.signal
-        });
-
-        return {
-          status: response.status,
-          body: await response.json()
-        };
-      } finally {
-        clearTimeout(timer);
+  const params = new URLSearchParams({
+    attendanceDateEnd: queryDate,
+    attendanceDateStart: queryDate,
+    attendanceType: "",
+    checkInWay: "workOnOff",
+    departmentId: "",
+    employeeId: "",
+    pageNumber: "1",
+    pageSize: "30",
+    punchesLocationId: ""
+  });
+  const result = await transport.fetch(
+    `/backend/pt/api/checkinRecords/onOffWork?${params.toString()}`,
+    {
+      method: "GET",
+      headers: {
+        accept: "*/*",
+        actioncode: "Default",
+        "content-type": "application/json",
+        functioncode: "PersonalWorkRecords"
       }
     },
-    { queryDate, timeoutMs }
+    timeoutMs
   );
 
   if (result.status === 401 || result.status === 403) {

@@ -19,6 +19,4 @@ if [[ -n "${PUNCH_PLAN_DATE:-}" ]]; then
   arguments+=(-PlanDate "$PUNCH_PLAN_DATE")
 fi
 
-"$project_directory/scripts/ensure-edge.sh"
-
 "$powershell_exe" -NoProfile -ExecutionPolicy Bypass -File "$runner_path" "${arguments[@]}"

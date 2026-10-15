@@ -186,7 +186,8 @@ leave. `cron:install` prints the schedule it installed. From here on
 
 ## Moving to another computer
 
-Copy or clone the project without `node_modules`, `logs` and `punch.conf`, then
-follow the steps above. Do not copy `%LOCALAPPDATA%\punchapollo`, which holds
-the Edge profile and the stored password and TOTP secret; they are protected
+Copy or clone the project without `node_modules`, `logs`, `punch.conf` and
+`.session.json`, then follow the steps above. Do not copy
+`%LOCALAPPDATA%\punchapollo`, which holds the Edge profile and the stored
+password and TOTP secret; they are protected
 for the original Windows account and computer.

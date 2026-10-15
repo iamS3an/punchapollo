@@ -52,37 +52,20 @@ export function dayOffReason(schedule) {
 }
 
 // Reads the schedule of one day (YYYY-MM-DD, Taipei), today by default.
-export async function getSchedule(page, timeoutMs, dateText = formatDate(taipeiDateParts())) {
+export async function getSchedule(transport, timeoutMs, dateText = formatDate(taipeiDateParts())) {
   const [year, month] = dateText.split("-").map(Number);
-  const result = await page.evaluate(
-    async ({ year, month, timeoutMs }) => {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-      try {
-        const response = await fetch(
-          `/backend/pt/api/EmployeeCalendars/scheduling?year=${year}&month=${month}`,
-          {
-            credentials: "include",
-            headers: {
-              accept: "*/*",
-              actioncode: "Default",
-              "content-type": "application/json",
-              functioncode: "PersonalShiftSchedule"
-            },
-            signal: controller.signal
-          }
-        );
-
-        return {
-          status: response.status,
-          body: await response.json()
-        };
-      } finally {
-        clearTimeout(timer);
+  const result = await transport.fetch(
+    `/backend/pt/api/EmployeeCalendars/scheduling?year=${year}&month=${month}`,
+    {
+      method: "GET",
+      headers: {
+        accept: "*/*",
+        actioncode: "Default",
+        "content-type": "application/json",
+        functioncode: "PersonalShiftSchedule"
       }
     },
-    { year, month, timeoutMs }
+    timeoutMs
   );
 
   if (result.status === 401 || result.status === 403) {

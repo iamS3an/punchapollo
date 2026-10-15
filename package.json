@@ -11,7 +11,6 @@
     "clock:plan": "PUNCH_ACTION=plan bash scripts/run-clock-in.sh",
     "config:show": "bash scripts/show-config.sh",
     "cron:install": "bash scripts/install-cron.sh",
-    "edge:start": "bash scripts/start-edge.sh",
     "location:set": "bash scripts/location-set.sh",
     "session:login": "bash scripts/session-login.sh",
     "password:set": "bash scripts/set-secret.sh password",
