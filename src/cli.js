@@ -101,6 +101,8 @@ try {
   }
   if (result) process.exitCode = result.code;
 } catch (error) {
-  console.error(`ERROR: ${error.message}`);
+  // fetch only says "fetch failed"; the reason is on its cause.
+  const cause = error.cause?.code ?? error.cause?.message;
+  console.error(`ERROR: ${error.message}${cause ? ` (${cause})` : ""}`);
   process.exitCode = 1;
 }
