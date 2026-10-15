@@ -1,5 +1,5 @@
 # Copy this file to punch.conf and fill in your own values.
-# After changing anything, run: npm run cron:install
+# After changing anything, run: npm run daemon:restart
 # Check the result with: npm run config:show
 
 # The attendance site.

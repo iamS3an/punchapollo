@@ -90,46 +90,32 @@ the site's own app.
 
 ## Schedule
 
-`npm run cron:install` writes a marked block into your crontab and leaves other
-entries untouched:
+`npm run daemon:start` runs `src/daemon.js` under pm2, a single process kept
+alive on Windows instead of a crontab. Each weekday it:
 
-```cron
-# BEGIN PUNCHAPOLLO
-17 9 * * 1-5 ~/punchapollo/scripts/cron-punch.sh clock-in
-20 18 * * 1-5 ~/punchapollo/scripts/cron-punch.sh clock-out
-30 6 * * 1-5 ~/punchapollo/scripts/cron-punch.sh plan
-# END PUNCHAPOLLO
-```
+- Waits until half an hour before the flexible clock-in hours open, then
+  reads the day's plan (the same `clock:plan` logic).
+- On a normal day with no clock-in yet, picks a random clock-in minute within
+  30 minutes of `SHIFT_START` itself (not from the plan), then waits for it.
+  Already clocked in - for example after a restart partway through the day -
+  it uses that actual time instead of rolling a new one.
+- On a leave day, uses the window the plan computes for it (shortly before a
+  morning leave ends, or shortly before an afternoon leave begins) instead of
+  the regular shift-start formula.
+- Either way, once a clock-in time is set, picks the clock-out time 1 to 5
+  minutes after a full shift from it, and waits for that too.
+- A punch that comes back "not due yet" (too early) is retried at the time it
+  reports.
+- After a clock-out, or a day with nothing to punch, it moves on to the next
+  weekday and reads that day's plan fresh - so leave filed overnight, or
+  while the computer was off, is still picked up before the day's clock-in.
 
-- The clock-in and clock-out minutes are random. After each scheduled clock-out
-  the wrapper installs new ones for the next working day.
-- Running `cron:install` by hand during a working day reads the plan for
-  today. With a clock-in already made, the written clock-in entry is set to
-  match it (today's punch already happened either way, but this keeps the
-  entry from looking unrelated to it) and clock-out is set 1 to 5 minutes
-  after `clockOutEarliest`. Not clocked in yet on a leave day, the written
-  clock-in entry comes from the plan's own window instead of the regular
-  shift-start formula. Either way, the one-off entries below are also added
-  on a leave day. If the plan cannot be read, clock-out is set to the latest
-  regular time.
-- The `plan` entry runs half an hour before the flexible clock-in hours open.
+To look at a specific day's plan, run `npm run clock:plan -- 2026-10-23`.
+`npm run daemon:logs` tails the daemon's own output; `logs/punch.log` keeps
+the scheduled-run entries.
 
-When the regular times do not fit a day, a one-off entry for that date is added
-to the block, for example
-`48 12 20 8 * .../cron-punch.sh clock-in # once 2026-08-20 clock-in`:
-
-- After each scheduled clock-out the wrapper plans the next working day, so
-  leave filed in advance is scheduled the evening before.
-- The morning `plan` run plans the day again, which covers leave filed
-  overnight and evenings when the computer was off.
-- A scheduled punch that fires too early adds one for the time it is due.
-
-The installer drops one-off entries once their date has passed. To plan a
-specific day by hand, run `scripts/cron-punch.sh plan 2026-10-23`; to only look
-at its plan, run `PUNCH_PLAN_DATE=2026-10-23 npm run clock:plan`.
-
-Only one scheduled run works at a time; a run that starts while another is
-still going exits without doing anything.
+Only one scheduled run works at a time; the daemon waits for each one to
+finish before starting the next.
 
 ## Why the shift comes from punch.conf
 

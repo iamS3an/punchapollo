@@ -1,7 +1,7 @@
 # AGENTS.md
 
 This file is a runbook for an AI assistant installing **punchapollo** for its
-user on a new Windows + WSL2 computer. Follow it as a sequence of steps with
+user on a Windows computer, with or without WSL2. Follow it as a sequence of steps with
 explicit commands and success checks, not as background reading. For prose
 explanations, [README.md](README.md), [docs/install.md](docs/install.md) and
 [docs/sign-in.md](docs/sign-in.md) are the human-facing versions of the same
@@ -11,12 +11,14 @@ install from this file.
 ## What this does
 
 Signs in to an attendance site through a dedicated Microsoft Edge
-profile on Windows, and clocks in/out on a schedule from a `cron` job in WSL.
-Edge is a GUI app and only runs on Windows; `cron` is driven from WSL/Linux.
-That split is why the project needs Node.js installed on **both** sides —
-Windows runs the scripts that talk to Edge, WSL runs `npm` and the schedule.
-Do not try to remove either side; it is architectural, not a packaging
-choice.
+profile on Windows, and clocks in/out on a schedule from a long-running
+process (`src/daemon.js`, kept alive by `pm2`). Everything — the daemon, pm2
+itself, the scripts — runs on Windows' `node.exe`, because it has to talk to
+Edge. The agent may itself be running in plain Windows (PowerShell) or in
+WSL2: the commands below are identical, and in WSL the `npm run` commands
+just hand over to Windows' `node.exe`. **Work out which one you are in
+first** (`uname` succeeds in WSL; PowerShell has no `uname`) — steps marked
+*WSL only* are skipped on plain Windows.
 
 ## Rules for you, the agent
 
@@ -38,63 +40,31 @@ choice.
 - Treat `git push`, `npm install` at the system level, and any WSL-wide
   config change (e.g. `.wslconfig`) as approval-gated — this project's steps
   below (`npm install` inside the repo, `git clone`) are expected and fine.
-- **Never run `wsl --shutdown` if you might be running inside the WSL
-  instance you'd be shutting down.** It kills your own process before you
-  can report back. See step 3 for the safe handling.
 
 ## Step-by-step
 
 ### 1. Check what's already there
 
-```bash
-node -v && npm -v                              # Node.js/npm in WSL
-systemctl is-active cron                       # expect: active
-date +%Z%z                                     # expect: CST+0800
-powershell.exe -NoProfile -Command "node -v"   # Node.js on Windows
-wsl.exe -l -v 2>/dev/null | cat                # Ubuntu should show VERSION 2
+```powershell
+node -v; git --version                         # plain Windows: Node.js and Git
 ```
 
-Anything that already succeeds, skip the matching step below.
+```bash
+node -v && npm -v                              # WSL only: Node.js/npm in WSL
+powershell.exe -NoProfile -Command "node -v"   # WSL only: Node.js on Windows
+wsl.exe -l -v 2>/dev/null | cat                # WSL only: Ubuntu should show VERSION 2
+```
 
-### 2. WSL2 + Ubuntu (if step 1's `wsl -l -v` didn't show it)
+Anything that already succeeds, skip the matching step below. On plain
+Windows, only Node.js and Git matter (step 4 and, if missing, `winget install
+Git.Git`).
+
+### 2. WSL only: WSL2 + Ubuntu (if step 1's `wsl -l -v` didn't show it)
 
 PowerShell, as administrator: `wsl --install -d Ubuntu`, restart if asked,
 open Ubuntu from the Start menu once to create the Linux user.
 
-### 3. systemd, cron, timezone in WSL (if step 1's cron/date checks failed)
-
-```bash
-grep -q 'systemd=true' /etc/wsl.conf 2>/dev/null || printf '[boot]\nsystemd=true\n' | sudo tee -a /etc/wsl.conf
-```
-
-**If that line was added, stop and check first: are you (the agent) running
-inside this same WSL distro?** Many agent CLIs, including Claude Code, are
-launched from inside WSL. `wsl --shutdown` tears down the whole WSL VM —
-if you run it yourself from inside that VM, it kills your own process mid-task
-before you can report anything back, and there is no "you" left to reopen
-Ubuntu or continue the remaining steps.
-
-- If you can tell you're running outside WSL (e.g. you were invoked from a
-  Windows-side tool), you may run `wsl --shutdown` yourself, then reopen
-  Ubuntu and continue.
-- If you're running inside WSL, or you aren't sure: do **not** run it. Stop
-  here and tell the user exactly this: `/etc/wsl.conf` now has
-  `systemd=true`; close all WSL windows, run `wsl --shutdown` themselves from
-  a plain Windows PowerShell/CMD window, reopen Ubuntu, and resume the
-  install (either by re-running this file with you or asking you to
-  continue) from step 3's `apt install` onward.
-
-Most existing installs already have cron/systemd working — step 1's checks
-catch that and skip this step entirely, so this only comes up on a genuinely
-fresh WSL setup. Once past the restart:
-
-```bash
-sudo apt update && sudo apt install -y cron git curl
-sudo timedatectl set-timezone Asia/Taipei
-sudo systemctl enable --now cron
-```
-
-### 4. Node.js in WSL (if step 1's `node -v` failed)
+### 3. WSL only: Node.js in WSL (if step 1's `node -v` failed)
 
 ```bash
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
@@ -102,23 +72,37 @@ curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
 
 Open a new Ubuntu terminal, then `nvm install --lts`.
 
-### 5. Node.js on Windows (if step 1's `powershell.exe ... node -v` failed)
+### 4. Node.js on Windows (if step 1's `powershell.exe ... node -v` failed)
 
-PowerShell: `winget install OpenJS.NodeJS.LTS`. If a Windows terminal was
-already open before this install, the WSL-driven PowerShell calls in this
-project re-read the Windows PATH from the registry on every run (see
-`run-clock-in.ps1` etc.), so a fresh `node -v` check right after install
-should already succeed — no `wsl --shutdown` needed just for this.
+PowerShell: `winget install OpenJS.NodeJS.LTS`. A terminal that was already
+open before this install keeps its old PATH; open a new one (WSL: a new Ubuntu
+terminal) before checking
+`node -v` again.
 
-### 6. Get the project — clone it on the Windows side, not WSL's own filesystem
+### 5. Get the project
 
+**Plain Windows:** clone anywhere and install, then treat that directory as
+the project directory for every step from here on:
+
+```powershell
+git clone https://github.com/iamS3an/punchapollo.git
+cd punchapollo
+npm install
+```
+
+**WSL only — prefer cloning on the Windows side, but WSL's home works too.**
 Windows' `node.exe` reads this project's files (`node_modules` especially) on
 every run. When the project lives on WSL's own filesystem, Windows has to
 reach it through `\\wsl.localhost\...`, which is dramatically slower for a
 package with this many files — measured 13–25s per run there, versus under
-1s when the project lives on a native Windows path. Clone onto the Windows
-side and symlink it into the WSL home directory, so every command below and
-every later `~/punchapollo` reference still works unchanged:
+1s when the project lives on a native Windows path. Default to cloning onto
+the Windows side and symlinking it into the WSL home directory, so every
+command below and every later `~/punchapollo` reference still works
+unchanged. If the user would rather keep it entirely in WSL's home directory,
+that is supported: plain `git clone` + `npm install` there, same commands,
+just slower (`daemon:autostart` then also starts the distro at logon). Don't
+insist on the symlink; mention the speed trade-off once and follow their
+choice:
 
 ```bash
 win_home="$(powershell.exe -NoProfile -Command '$env:USERPROFILE' | tr -d '\r')"
@@ -129,13 +113,12 @@ ln -s "$project_dir" ~/punchapollo
 cd ~/punchapollo
 ```
 
-From here on, `~/punchapollo` is a symlink to that native path. Both sides
-resolve it correctly — WSL reads through it transparently, and `wslpath -w`
-run on anything reached through it still returns the native `C:\...` form,
-not a UNC path, so `$PSScriptRoot` in the `.ps1` scripts stays native too.
+From here on, `~/punchapollo` is a symlink to that native path, so Windows
+still sees a native `C:\...` project and WSL reads through it transparently.
 Treat `~/punchapollo` as the project directory for every step from here on.
+Running `npm run daemon:start` again later is harmless.
 
-### 7. Settings — ask the user for these
+### 6. Settings — ask the user for these
 
 ```bash
 cp punch.conf.example punch.conf
@@ -166,7 +149,7 @@ npm run config:show
 
 This must pass with no error before continuing.
 
-### 8. Sign in once, then set the punch location
+### 7. Sign in once, then set the punch location
 
 ```bash
 npm run session:login
@@ -189,10 +172,10 @@ user would rather keep the network-address check only, or use plain `gps`
 with no fallback, set `PUNCH_METHOD` to `ip` or `gps` yourself — raise it as
 a choice only if they ask.
 
-### 9. Automatic sign-in — default is to skip this
+### 8. Automatic sign-in — default is to skip this
 
 `AUTO_SSO` is off by default and the install is complete without it; move on
-to step 10 unless the user explicitly asks for automatic sign-in. Do not
+to step 9 unless the user explicitly asks for automatic sign-in. Do not
 bring it up yourself, suggest it, or set it up on your own initiative — it
 means storing the user's password and authenticator secret on disk, so it is
 the user's call to make, not yours to offer. If they explicitly ask for it:
@@ -206,19 +189,32 @@ the user's call to make, not yours to offer. If they explicitly ask for it:
   specifically, from a clean throwaway browser profile — and report the
   result; it must end with `"authenticated": true`.
 
-### 10. Verify and install the schedule
+### 9. Verify and start the daemon
 
 ```bash
 npm run clock:plan      # reads the site, punches nothing — check the plan makes sense
-npm run cron:install    # installs the schedule; re-run after any punch.conf edit
-npm run config:show     # confirm the installed schedule
+npm run daemon:start    # starts src/daemon.js under pm2; restart it after any punch.conf edit
+npm run config:show     # confirm the daemon shows as "online"
 ```
 
-### 11. Report to the user
+```bash
+npm run daemon:autostart   # brings the daemon back after a reboot
+```
+
+`daemon:autostart` needs no administrator rights or `sudo`: it registers a
+logon task for the Windows user, from either PowerShell or WSL.
+
+If this machine had an older install with `npm run cron:install` already run
+in WSL, `daemon:start` first removes that old crontab block from every WSL
+distro (through `wsl.exe`), leaving unrelated entries alone, and prints a line
+for each one it cleaned. There is no separate migration step.
+
+### 10. Report to the user
 
 Summarize: what was installed, what `clock:plan` showed for today, whether
 `AUTO_SSO` is on, and that `logs/punch.log` records every scheduled run from
 now on. Mention that a Windows notification also shows every punch result and
-tells them when they need to sign in by hand. Point them at the README's
+tells them when they need to sign in by hand, and that `npm run daemon:logs`
+tails the daemon's own output live. Point them at the README's
 Troubleshooting table for symptoms like `Cannot connect to Edge` or
 `Current IP is not allowed for web punching`.

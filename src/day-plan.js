@@ -156,7 +156,7 @@ function randomBetween(min, max) {
   return min + Math.floor(Math.random() * (max - min + 1));
 }
 
-// When cron should start the clock-in: a random moment inside the window, or
+// When to start the clock-in: a random moment inside the window, or
 // just ahead of an exact one. Never in the past.
 export function pickClockInTime(plan, now) {
   const start = plan.clockIn.exact
@@ -165,7 +165,7 @@ export function pickClockInTime(plan, now) {
   return Math.max(start, now + 2 * MINUTE);
 }
 
-// When cron should start the clock-out: a random delay after the working day
+// When to start the clock-out: a random delay after the working day
 // ends, kept inside the flexible hours. With no room left it is the end
 // itself, because a full working day takes priority over the limit.
 export function pickClockOutTime(plan, now) {

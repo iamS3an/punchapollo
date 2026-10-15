@@ -1,4 +1,4 @@
-// Reads punch.conf, the same NAME=value file the cron scripts read.
+// Reads punch.conf, a NAME=value file.
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";

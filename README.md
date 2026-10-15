@@ -1,7 +1,8 @@
 # Punchapollo
 
-Clocks in and out of an attendance site on a schedule, from WSL, through a
-dedicated Microsoft Edge profile on Windows.
+Clocks in and out of an attendance site on a schedule, through a dedicated
+Microsoft Edge profile on Windows. Runs from plain Windows, or with WSL if you
+prefer to type the commands there - the commands are the same.
 
 - Clock-in lands at a random time each working day; clock-out follows a full
   shift later.
@@ -16,16 +17,17 @@ dedicated Microsoft Edge profile on Windows.
 
 ## Quick start
 
-Needs Windows with Edge and Node.js, and WSL2 Ubuntu with Node.js, `cron` and
-the Asia/Taipei timezone. Starting from nothing? Follow
+Needs Windows with Edge and Node.js. WSL2 is optional: if you type the
+commands there, it needs Node.js too, only so `npm run` works. Starting from
+nothing? Follow
 [docs/install.md](docs/install.md). Setting this up with the help of an AI
 assistant? Point it at [AGENTS.md](AGENTS.md) instead — it's the same steps
 written for an agent to execute.
 
-Clone onto the Windows side and symlink it into WSL, not onto WSL's own
-filesystem — see [docs/install.md](docs/install.md#6-get-the-project) for why
-and how to find that directory and symlink it into WSL; `cd` there first,
-then:
+On plain Windows, clone anywhere and run these in PowerShell. From WSL, you
+can clone straight into your home directory, or - faster - onto the Windows
+side with a symlink into WSL; see
+[docs/install.md](docs/install.md#5-get-the-project). `cd` there first, then:
 
 ```bash
 git clone https://github.com/iamS3an/punchapollo.git && cd punchapollo
@@ -34,7 +36,8 @@ cp punch.conf.example punch.conf   # then fill in SITE_URL and SIGN_IN_URL
 npm run session:login              # sign in once in the Edge window that opens
 npm run location:set               # picks your office; punches by its position from now on
 npm run clock:plan                 # shows today's plan, punches nothing
-npm run cron:install               # installs the schedule
+npm run daemon:start               # starts the scheduler, kept alive by pm2
+npm run daemon:autostart           # brings it back after a reboot
 ```
 
 Every scheduled run is recorded in `logs/punch.log`.
@@ -56,7 +59,7 @@ Every scheduled run is recorded in `logs/punch.log`.
 | `FLEX_CLOCK_OUT_START`, `FLEX_CLOCK_OUT_END` | Flexible clock-out hours |
 | `LUNCH_START`, `LUNCH_END` | Lunch break |
 
-Run `npm run config:show` to check the file and `npm run cron:install` after
+Run `npm run config:show` to check the file and `npm run daemon:restart` after
 changing it. An invalid setting stops everything until it is fixed.
 
 ## Commands
@@ -67,7 +70,8 @@ changing it. An invalid setting stops everything until it is fixed.
 |---|---|
 | `npm run clock:plan` | Prints today's plan; punches nothing |
 | `npm run clock:in` / `clock:out` | Punches now, by hand |
-| `npm run config:show` | Shows the settings and the installed schedule |
+| `npm run config:show` | Shows the settings and whether the daemon is running |
+| `npm run daemon:logs` | Tails the daemon's own output live |
 
 ### Setup
 
@@ -75,7 +79,9 @@ changing it. An invalid setting stops everything until it is fixed.
 |---|---|
 | `npm run session:login` | Reuses the saved session, or signs in if it has expired |
 | `npm run location:set` | Lists this account's punch locations and sets `GPS_LOCATION_ID` to the one you pick |
-| `npm run cron:install` | Installs or refreshes the schedule; run again after any `punch.conf` edit |
+| `npm run daemon:start` / `stop` / `restart` | Starts, stops or restarts the scheduler under pm2; restart after any `punch.conf` edit. `start` is safe to repeat |
+| `npm run daemon:autostart` | Registers a logon task that restores the daemon after a reboot |
+| `npm run daemon:status` | Shows pm2's status for every app it manages, not just this one |
 
 ### Automatic sign-in (`AUTO_SSO=on` only)
 
@@ -114,8 +120,9 @@ Setup, including the Microsoft account setting that automatic codes depend on:
 
 ## Troubleshooting
 
-Start with `tail -40 logs/punch.log`. A Windows notification also shows every
-result, but the log is what persists.
+Start with the end of `logs/punch.log` (`tail -40 logs/punch.log`, or
+`Get-Content logs\punch.log -Tail 40` in PowerShell). A Windows notification
+also shows every result, but the log is what persists.
 
 | Symptom | Likely cause |
 |---|---|
@@ -127,10 +134,9 @@ result, but the log is what persists.
 | `The punch needs a reason ...` | The punch was too early or too late for the day's overtime limits, and the site offered no "no overtime" answer |
 | `Login timed out` | The session expired and nobody signed in, or a stored value was rejected; run `npm run session:login` |
 | No notification shown | Check Windows' notification settings haven't muted PowerShell/balloon tips, or Focus Assist is on |
-| `Windows Node.js was not found` | Node.js is missing on the Windows side |
+| `node.exe: command not found` in WSL | Windows Node.js is missing, or WSL does not expose the Windows PATH (`appendWindowsPath` in `/etc/wsl.conf`) |
 | `punch.conf: ...` | A setting is invalid; `npm run config:show` repeats the message |
-| Punches at the wrong hour | The WSL timezone is not UTC+8 |
-| Nothing in the log | The computer was asleep, WSL was not running, or `cron` is not active |
+| Nothing in the log | The computer was asleep, the Windows user was not signed in, or the daemon is not running - check `npm run daemon:status` (a project kept inside WSL also needs that distro running) |
 
 ## License
 

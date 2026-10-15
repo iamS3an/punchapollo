@@ -337,7 +337,7 @@ async function main() {
 }
 
 // A safety net: nothing here is expected to leave a handle open once main()
-// settles, but if one ever does, cron must not hang forever behind it.
+// settles, but if one ever does, the daemon must not hang forever behind it.
 // Armed only now, not at module load, so it can never cut off main() itself
 // still running (a leave day's exact-time wait, a slow sign-in, a slow
 // punch). Unref'd, so it never keeps the process alive by itself, and 15s is

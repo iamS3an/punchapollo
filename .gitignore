@@ -8,3 +8,6 @@ punch.conf
 
 # The saved session cookie; npm run session:login or a clock:* run recreates it.
 .session.json
+
+# Written by the running daemon; shows whether it is alive.
+.daemon.json

@@ -4,9 +4,9 @@ param(
     [string]$Kind
 )
 
-# A long-lived WSL session can keep an environment snapshot from before
-# Node.js was installed; rebuild PATH from the registry so a fresh install is
-# found without restarting WSL.
+# A long-lived terminal (or WSL session) can keep an environment snapshot from
+# before Node.js was installed; rebuild PATH from the registry so a fresh
+# install is found without restarting it.
 $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
     [System.Environment]::GetEnvironmentVariable("Path", "User")
 
