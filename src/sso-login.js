@@ -1,4 +1,5 @@
 import { loadConfig } from "./config.js";
+import { notifyWindows } from "./notify.js";
 import { loadSsoPassword, loadTotpSecret } from "./secret-store.js";
 import { generateTotp, totpSecondsRemaining } from "./totp.js";
 
@@ -53,6 +54,11 @@ export async function isAuthenticated(page) {
 // keeps the new session.
 async function waitForManualSignIn(page, config, deadline, timeoutMs) {
   console.error("The site needs a sign-in. Sign in in the Edge window; automation will resume.");
+  notifyWindows(
+    "Punchapollo needs you to sign in",
+    `Open the dedicated Edge window and sign in within ${Math.round(timeoutMs / 60_000)} minutes, or this run times out.`,
+    "Warning"
+  );
   const target = encodeURIComponent(config.siteUrl);
   await page.goto(`${config.signInUrl}/Login?original_target=${target}`, {
     waitUntil: "domcontentloaded",
@@ -98,6 +104,12 @@ export async function signIn(page, timeoutMs) {
     if (askedForHelp) return;
     askedForHelp = true;
     console.error(`${reason} Complete the sign-in in Edge; automation will resume.`);
+    const minutesLeft = Math.max(0, Math.round((deadline - Date.now()) / 60_000));
+    notifyWindows(
+      "Punchapollo needs you to sign in",
+      `${reason} Complete it in the dedicated Edge window within ${minutesLeft} minutes, or this run times out.`,
+      "Warning"
+    );
     await page.bringToFront().catch(() => {});
   };
 

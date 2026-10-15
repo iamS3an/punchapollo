@@ -11,6 +11,7 @@ import {
 } from "./day-plan.js";
 import { loadConfig } from "./config.js";
 import { dayOffReason, getSchedule } from "./leave-check.js";
+import { notifyWindows, taipeiClock } from "./notify.js";
 import { punchByApi, punchByGps } from "./punch-api.js";
 import { clearSession, loadSession, saveSessionFromPage } from "./session-store.js";
 import { isAuthenticated, signIn } from "./sso-login.js";
@@ -147,6 +148,10 @@ function gpsPunchNotMade(error) {
 
 function printSkipped(action, date, reason, details = {}) {
   console.log(JSON.stringify({ action, skipped: true, reason, date, ...details }, null, 2));
+  const extra = Object.entries(details)
+    .map(([key, value]) => `${key}: ${value}`)
+    .join(", ");
+  notifyWindows(`Punchapollo: ${action} skipped`, `${reason} (${date})${extra ? " - " + extra : ""}`);
 }
 
 // Taipei time with its offset, e.g. 2026-01-05T09:00:00+08:00. Rounded up to
@@ -316,6 +321,19 @@ async function main() {
     }
   }
   console.log(JSON.stringify({ ...result, skipped: false }, null, 2));
+  const punchTime = Date.parse(result.punchDate);
+  // The API's own locationName already says "web punch" or the real office
+  // for ip and gps alike - no need to also spell out the method.
+  const label = result.locationName || "網頁打卡";
+  const primary = `${Number.isFinite(punchTime) ? taipeiClock(punchTime) : taipeiClock()}/${label}`;
+  // A clock-out's own time means little without when the day started.
+  const extra = [
+    result.reason,
+    REQUESTED_ACTION === "clock-out" && workRecord.hasClockIn ? `clocked in ${taipeiClock(workRecord.clockInAt)}` : null
+  ]
+    .filter(Boolean)
+    .join(", ");
+  notifyWindows(`Punchapollo: ${REQUESTED_ACTION} succeeded`, extra ? `${primary} (${extra})` : primary);
 }
 
 // A safety net: nothing here is expected to leave a handle open once main()
@@ -334,6 +352,9 @@ main().then(
   () => finish(0),
   (error) => {
     console.error(`ERROR: ${error.message}`);
+    if (REQUESTED_ACTION !== "plan") {
+      notifyWindows(`Punchapollo: ${REQUESTED_ACTION} error`, error.message, "Error");
+    }
     finish(1);
   }
 );

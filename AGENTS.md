@@ -217,5 +217,7 @@ npm run config:show     # confirm the installed schedule
 
 Summarize: what was installed, what `clock:plan` showed for today, whether
 `AUTO_SSO` is on, and that `logs/punch.log` records every scheduled run from
-now on. Point them at the README's Troubleshooting table for symptoms like
-`Cannot connect to Edge` or `Current IP is not allowed for web punching`.
+now on. Mention that a Windows notification also shows every punch result and
+tells them when they need to sign in by hand. Point them at the README's
+Troubleshooting table for symptoms like `Cannot connect to Edge` or
+`Current IP is not allowed for web punching`.

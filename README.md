@@ -11,6 +11,8 @@ dedicated Microsoft Edge profile on Windows.
   once it expires does Edge open, to sign in by hand or through Microsoft SSO
   by itself if you turn that on.
 - When the right time is in doubt, nothing is punched.
+- A Windows notification shows every punch result, and tells you when you
+  need to sign in by hand.
 
 ## Quick start
 
@@ -112,16 +114,19 @@ Setup, including the Microsoft account setting that automatic codes depend on:
 
 ## Troubleshooting
 
-Start with `tail -40 logs/punch.log`. Nothing else notifies you of a missed
-punch.
+Start with `tail -40 logs/punch.log`. A Windows notification also shows every
+result, but the log is what persists.
 
 | Symptom | Likely cause |
 |---|---|
 | `Cannot connect to Edge` | DevTools (F12) is open in the dedicated Edge window; close it |
 | `Current IP is not allowed for web punching` | The computer is not on a network the site accepts |
 | `Punch API returned ...` with `gps` | The site refused the GPS punch; with `auto` the IP punch is tried next |
+| `Punch API returned ...` with a status and the start of a body | An unexpected response - often a WAF challenge page, not the attendance API itself |
+| `Punch submission result is unknown ...` | The punch request itself failed (network/timeout); not retried automatically, since it may already be recorded |
 | `The punch needs a reason ...` | The punch was too early or too late for the day's overtime limits, and the site offered no "no overtime" answer |
 | `Login timed out` | The session expired and nobody signed in, or a stored value was rejected; run `npm run session:login` |
+| No notification shown | Check Windows' notification settings haven't muted PowerShell/balloon tips, or Focus Assist is on |
 | `Windows Node.js was not found` | Node.js is missing on the Windows side |
 | `punch.conf: ...` | A setting is invalid; `npm run config:show` repeats the message |
 | Punches at the wrong hour | The WSL timezone is not UTC+8 |

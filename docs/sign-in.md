@@ -1,13 +1,18 @@
 # Sign-in
 
-The scripts use an Edge profile of their own, kept in
-`%LOCALAPPDATA%\punchapollo\edge-profile` and started with remote debugging
-on port `9222` whenever a run needs it. It is separate from your everyday Edge.
+Every run first uses the session cookie saved in `.session.json`, as a plain
+request with no browser at all. Nothing below happens while that cookie is
+valid - it only comes into play once it is missing or the site answers that
+authentication is required.
 
-Every run first uses the session saved in that profile. Nothing below happens
-while the session is valid. When the site answers that authentication is
-required, `AUTO_SSO` decides what comes next, and the run then retries what it
-was doing.
+Signing in still goes through a dedicated Edge profile of its own, kept in
+`%LOCALAPPDATA%\punchapollo\edge-profile` and started with remote debugging
+on port `9222` only when a sign-in is actually needed. It is separate from
+your everyday Edge. `AUTO_SSO` decides what happens once Edge is up, and the
+run then saves the fresh cookie and retries what it was doing.
+
+A Windows notification tells you when a run is waiting on you to sign in by
+hand, with how many minutes are left before it times out.
 
 ## AUTO_SSO=off: sign in by hand
 
