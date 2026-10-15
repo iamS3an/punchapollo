@@ -25,7 +25,8 @@ SSO_PROVIDER=Microsoft
 SSO_DOMAIN=example.com
 SSO_ACCOUNT=you@example.com
 
-# How a punch proves you are at work.
+# How a punch proves you are at work. Recommended: run npm run location:set
+# after signing in once; it picks gps and your office for you.
 #   ip   The site checks this computer's network address, like the punch
 #        button on its web page.
 #   gps  Like the phone app: the position registered for GPS_LOCATION_ID is

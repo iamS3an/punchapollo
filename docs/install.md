@@ -132,7 +132,7 @@ yours. The [README](../README.md#settings) lists every setting and
 [sign-in.md](sign-in.md) explains the sign-in choices. `config:show` repeats what it read
 and reports anything it cannot accept.
 
-## 8. Sign in once
+## 8. Sign in and set your punch location
 
 ```bash
 npm run session:login
@@ -141,6 +141,20 @@ npm run session:login
 An Edge window with a profile of its own opens on the site's sign-in page. Sign
 in there the way you normally do. The command prints `authenticated: true` when
 it sees the session, and that Edge profile keeps it from then on.
+
+Punching defaults to checking this computer's network address, like the web
+page's own button, but sending your office's registered position instead,
+like the phone app, is recommended — it doesn't depend on which network this
+computer is on:
+
+```bash
+npm run location:set
+```
+
+It lists your account's punch locations; pick your office. That sets
+`PUNCH_METHOD=gps` and `GPS_LOCATION_ID` in `punch.conf` for you. The
+[README](../README.md#settings) explains `auto`, which also falls back to
+`ip` on a day `gps` doesn't go through.
 
 ## 9. Optional: automatic sign-in
 

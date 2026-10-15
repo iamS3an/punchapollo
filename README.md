@@ -29,6 +29,7 @@ git clone https://github.com/iamS3an/punchapollo.git && cd punchapollo
 npm install
 cp punch.conf.example punch.conf   # then fill in SITE_URL and SIGN_IN_URL
 npm run session:login              # sign in once in the Edge window that opens
+npm run location:set               # picks your office; punches by its position from now on
 npm run clock:plan                 # shows today's plan, punches nothing
 npm run cron:install               # installs the schedule
 ```
