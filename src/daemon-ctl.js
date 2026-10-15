@@ -21,15 +21,36 @@ function pm2(...args) {
   if (status !== 0) process.exit(status ?? 1);
 }
 
-// "online", "stopped", ... for this app, or null when pm2 does not know it.
-function appStatus() {
+// pm2's entry for this app, or null when it does not know it.
+function appEntry() {
   const { stdout } = spawnSync(process.execPath, [PM2_JS, "jlist"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
   try {
     const json = (stdout ?? "").split("\n").reverse().find((line) => line.startsWith("[{") || line === "[]");
-    const app = JSON.parse(json ?? "[]").find((entry) => entry.name === NAME);
-    return app ? app.pm2_env.status : null;
+    return JSON.parse(json ?? "[]").find((entry) => entry.name === NAME) ?? null;
   } catch {
     return null;
+  }
+}
+
+// "online", "stopped", ... for this app, or null when pm2 does not know it.
+function appStatus() {
+  return appEntry()?.pm2_env.status ?? null;
+}
+
+// pm2 reads memory through wmic, which newer Windows no longer has, and shows
+// 0b there; the daemon's real memory is asked of Windows directly.
+function printMemory() {
+  const pid = appEntry()?.pid;
+  if (!pid) return;
+  try {
+    const mb = execFileSync(
+      "powershell.exe",
+      ["-NoProfile", "-Command", `[math]::Round((Get-Process -Id ${Number(pid)}).WorkingSet64 / 1MB)`],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 20_000, windowsHide: true }
+    ).trim();
+    if (/^\d+$/.test(mb)) console.log(`Daemon memory (pid ${pid}): ${mb} MB`);
+  } catch {
+    // Informational only.
   }
 }
 
@@ -148,6 +169,7 @@ if (command === "start") {
   pm2("logs", NAME);
 } else if (command === "status") {
   pm2("status");
+  printMemory();
 } else {
   console.error("Usage: daemon-ctl.js start | autostart | stop | restart | logs | status");
   process.exit(2);
