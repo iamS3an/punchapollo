@@ -79,7 +79,9 @@ fi
 shopt -u nocasematch
 
 # The all-zero id is the example's placeholder, which the site lists as "other".
-if [[ "$PUNCH_METHOD" != "ip" && "$GPS_LOCATION_ID" =~ ^[0-]+$ ]]; then
+# gps has no fallback, so it must already be a real location; auto tolerates
+# the placeholder and simply punches by IP until location:set fills it in.
+if [[ "$PUNCH_METHOD" == "gps" && "$GPS_LOCATION_ID" =~ ^[0-]+$ ]]; then
   printf 'punch.conf: set GPS_LOCATION_ID to your office'"'"'s punch location.\n' >&2
   exit 1
 fi

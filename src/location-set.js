@@ -1,5 +1,5 @@
 // Lists the account's punch locations and writes the one you pick into
-// punch.conf as GPS_LOCATION_ID, with PUNCH_METHOD=gps unless it is auto.
+// punch.conf as GPS_LOCATION_ID. Does not touch PUNCH_METHOD.
 import { chromium } from "playwright-core";
 import { readFileSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
@@ -76,11 +76,8 @@ function setValue(key, value) {
     lines.push(`${key}=${value}`);
   }
 }
-// auto already punches by GPS at this location, falling back to IP.
-const method = lines.includes("PUNCH_METHOD=auto") ? "auto" : "gps";
-setValue("PUNCH_METHOD", method);
 setValue("GPS_LOCATION_ID", chosen.id);
 writeFileSync(CONFIG_PATH, lines.join("\n"));
 
-console.log(`Set PUNCH_METHOD=${method} and GPS_LOCATION_ID for "${chosen.name}" in punch.conf.`);
+console.log(`Set GPS_LOCATION_ID for "${chosen.name}" in punch.conf.`);
 process.exit(0);

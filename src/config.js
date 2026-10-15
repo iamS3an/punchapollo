@@ -88,7 +88,10 @@ function parseConfig(text) {
   }
 
   // The all-zero id is the example's placeholder, which the site lists as "other".
-  if (punchMethod !== "ip" && /^[0-]+$/.test(values.GPS_LOCATION_ID)) {
+  // gps has no fallback, so it must already be a real location; auto tolerates
+  // the placeholder and simply punches by IP until location:set fills it in.
+  const gpsIdIsPlaceholder = /^[0-]+$/.test(values.GPS_LOCATION_ID);
+  if (punchMethod === "gps" && gpsIdIsPlaceholder) {
     throw new Error("punch.conf: set GPS_LOCATION_ID to your office's punch location.");
   }
 
@@ -121,7 +124,7 @@ function parseConfig(text) {
         }
       : { auto: false },
     punchMethod,
-    gpsLocationId: punchMethod !== "ip" ? values.GPS_LOCATION_ID : null,
+    gpsLocationId: punchMethod === "ip" || gpsIdIsPlaceholder ? null : values.GPS_LOCATION_ID,
     shift: { start: values.SHIFT_START, end: values.SHIFT_END },
     shiftLengthMs: (m.SHIFT_END - m.SHIFT_START) * 60_000,
     flexClockIn: { start: values.FLEX_CLOCK_IN_START, end: values.FLEX_CLOCK_IN_END },

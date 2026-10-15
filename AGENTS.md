@@ -176,17 +176,18 @@ An Edge window opens on the sign-in page. The user signs in there by hand.
 Expect `authenticated: true` in the output.
 
 Run `npm run location:set` next, as a normal part of every install, not only
-when asked — sending the office's own registered position (like the phone
-app) is the recommended default, over checking this computer's network
-address like the web page's own button. It lists the account's punch
-locations and asks which one to pick: this is interactive input, and if your
+when asked — `punch.conf.example`'s default, `PUNCH_METHOD=auto`, already
+sends the office's own registered position (like the phone app), falling
+back to the network-address check (like the web page's own button) only on
+a day the GPS punch was never sent or was refused; until a real location is
+set it punches by the network-address check alone. `location:set` lists the
+account's punch locations and asks which one to pick, writing only
+`GPS_LOCATION_ID` into `punch.conf`: this is interactive input, and if your
 shell can't forward it through to the command, ask the user to run
-`npm run location:set` themselves and tell you which one they picked. It
-writes `PUNCH_METHOD=gps` and `GPS_LOCATION_ID` into `punch.conf`. If the
-user would rather keep the network-address check, or use `auto` (`gps`,
-falling back to `ip` only when the `gps` punch was never sent or was
-refused), set `PUNCH_METHOD` to `ip` or `auto` yourself afterward — raise it
-as a choice only if they ask.
+`npm run location:set` themselves and tell you which one they picked. If the
+user would rather keep the network-address check only, or use plain `gps`
+with no fallback, set `PUNCH_METHOD` to `ip` or `gps` yourself — raise it as
+a choice only if they ask.
 
 ### 9. Automatic sign-in — default is to skip this
 

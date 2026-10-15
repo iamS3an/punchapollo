@@ -26,19 +26,21 @@ SSO_DOMAIN=example.com
 SSO_ACCOUNT=you@example.com
 
 # How a punch proves you are at work. Recommended: run npm run location:set
-# after signing in once; it picks gps and your office for you.
+# after signing in once; it fills in GPS_LOCATION_ID for you below.
 #   ip   The site checks this computer's network address, like the punch
 #        button on its web page.
 #   gps  Like the phone app: the position registered for GPS_LOCATION_ID is
-#        sent. Where this computer actually is, is not checked.
+#        sent. Where this computer actually is, is not checked. Needs a real
+#        GPS_LOCATION_ID - there is no fallback if it is refused.
 #   auto gps, and ip instead whenever the gps punch was not made: never sent,
-#        or refused by the site.
+#        or refused by the site. Until GPS_LOCATION_ID is set to a real
+#        location, this punches by ip.
 #   GPS_LOCATION_ID  Used with gps and auto: the punch location of your
 #                    office; npm run location:set picks it for you.
 # Either way, a punch the site would ask a reason for (too early or too late
 # for the day's overtime limits) is sent with the answer that no overtime is
 # applied for; overtime is applied for separately.
-PUNCH_METHOD=ip
+PUNCH_METHOD=auto
 GPS_LOCATION_ID=00000000-0000-0000-0000-000000000000
 
 # Regular shift, Taipei time, as HH:MM. Scheduled clock-in lands within the

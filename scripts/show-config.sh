@@ -26,6 +26,8 @@ else
 fi
 if [[ "$PUNCH_METHOD" == "gps" ]]; then
   printf 'Punch method          gps (location %s'"'"'s registered position)\n' "$GPS_LOCATION_ID"
+elif [[ "$PUNCH_METHOD" == "auto" && "$GPS_LOCATION_ID" =~ ^[0-]+$ ]]; then
+  printf 'Punch method          auto (no location set yet; punching by ip - run: npm run location:set)\n'
 elif [[ "$PUNCH_METHOD" == "auto" ]]; then
   printf 'Punch method          auto (gps at location %s, ip when gps is not made)\n' "$GPS_LOCATION_ID"
 else

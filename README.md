@@ -49,8 +49,8 @@ Every scheduled run is recorded in `logs/punch.log`.
 | `SIGN_IN_URL` | The address of the sign-in page, without its last part (`/Login`) |
 | `AUTO_SSO` | When the session has expired: `off` waits for you to sign in, `on` signs in by itself |
 | `SSO_PROVIDER`, `SSO_DOMAIN`, `SSO_ACCOUNT` | For `AUTO_SSO=on` only. The provider must be `Microsoft` |
-| `PUNCH_METHOD` | How a punch is made: `ip` (the network address is checked, like the web page), `gps` (the office's registered position is sent, like the phone app; where this computer is, is not checked) or `auto` (`gps`, and `ip` whenever the `gps` punch was not made) |
-| `GPS_LOCATION_ID` | For `gps` and `auto`. Your office's punch location; `npm run location:set` picks it |
+| `PUNCH_METHOD` | How a punch is made: `ip` (the network address is checked, like the web page), `gps` (the office's registered position is sent, like the phone app; where this computer is, is not checked) or `auto` (`gps`, and `ip` whenever the `gps` punch was not made). Default and recommended: `auto` |
+| `GPS_LOCATION_ID` | For `gps` and `auto`. Your office's punch location; `npm run location:set` picks it. Until it is set, `auto` punches by `ip`; `gps` needs a real one |
 | `SHIFT_START`, `SHIFT_END` | Regular shift, e.g. `09:00` and `18:00` |
 | `FLEX_CLOCK_IN_START`, `FLEX_CLOCK_IN_END` | Flexible clock-in hours |
 | `FLEX_CLOCK_OUT_START`, `FLEX_CLOCK_OUT_END` | Flexible clock-out hours |
@@ -74,7 +74,7 @@ changing it. An invalid setting stops everything until it is fixed.
 | Command | What it does |
 |---|---|
 | `npm run session:login` | Reuses the saved session, or signs in if it has expired |
-| `npm run location:set` | Lists this account's punch locations and sets `GPS_LOCATION_ID` to the one you pick, with `PUNCH_METHOD=gps` unless it is `auto` |
+| `npm run location:set` | Lists this account's punch locations and sets `GPS_LOCATION_ID` to the one you pick |
 | `npm run cron:install` | Installs or refreshes the schedule; run again after any `punch.conf` edit |
 
 ### Automatic sign-in (`AUTO_SSO=on` only)

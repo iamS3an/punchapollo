@@ -302,7 +302,7 @@ async function main() {
 
   const punchByIp = () => withAuth((t) => punchByApi(t, REQUESTED_ACTION, SUBMIT_TIMEOUT_MS));
   let result;
-  if (PUNCH_METHOD === "ip") {
+  if (PUNCH_METHOD === "ip" || !gpsLocationId) {
     result = await punchByIp();
   } else {
     try {
