@@ -174,3 +174,27 @@ export function pickClockOutTime(plan, now) {
   const start = latest >= earliest ? randomBetween(earliest, latest) : plan.clockOutEarliest;
   return Math.max(start, now + 2 * MINUTE);
 }
+
+// What a clock-out time of `currentAt` should become after a fresh `plan`
+// (clock:plan's JSON): the same time while it is still a reasonable moment
+// for it, a newly picked one when it is not, and null when there is nothing
+// left to punch. `pickNormal(clockInMs)` picks a time for a normal day.
+export function reviseClockOut(plan, currentAt, pickNormal) {
+  if (plan.hasClockOut) return { at: null, why: "clock-out already done" };
+  if (plan.type === "off") return { at: null, why: plan.reason ?? "no work today" };
+  if (plan.type !== "normal" && plan.type !== "leave-at-start" && plan.type !== "leave-at-end") {
+    return { at: null, why: `${plan.type}; punch by hand` };
+  }
+  // Without a clock-in there is no full shift to count from; clock-in.js
+  // itself skips a clock-out that has no clock-in behind it.
+  if (!plan.clockOutEarliest) return { at: currentAt, why: "no clock-in yet" };
+
+  const earliest = Date.parse(plan.clockOutEarliest);
+  const reasonable =
+    currentAt !== null && currentAt >= earliest && currentAt <= earliest + DEPARTURE_DELAY_MS.max + MINUTE;
+  if (reasonable) return { at: currentAt, why: "unchanged" };
+  if (plan.type === "normal") return { at: pickNormal(Date.parse(plan.clockInAt)), why: "re-picked" };
+  return plan.clockOutDueAt
+    ? { at: Date.parse(plan.clockOutDueAt), why: "leave plan" }
+    : { at: null, why: "the planned time has passed; punch by hand" };
+}

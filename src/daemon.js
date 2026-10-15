@@ -5,7 +5,7 @@ import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig } from "./config.js";
-import { computeDayPlan, pickClockInTime, pickClockOutTime } from "./day-plan.js";
+import { computeDayPlan, pickClockInTime, pickClockOutTime, reviseClockOut } from "./day-plan.js";
 import { runClockIn } from "./launch.js";
 import {
   PLAN_CHECK_LEAD_MS,
@@ -25,9 +25,6 @@ const HEARTBEAT_PATH = join(PROJECT_ROOT, ".daemon.json");
 const HEARTBEAT_INTERVAL_MS = 10_000;
 // A heartbeat this old means the daemon holding it is gone.
 const HEARTBEAT_STALE_MS = 35_000;
-// While waiting for the plan check, punch.conf is read again this often, so
-// an edit made overnight still shapes the same day.
-const CONFIG_RECHECK_MS = 10 * 60_000;
 const CONFIG_RETRY_MS = 5 * 60_000;
 
 function sleep(milliseconds) {
@@ -121,84 +118,85 @@ async function currentConfig() {
   }
 }
 
+// A transient network blip (seen in practice) would otherwise skip the whole
+// day, since there is no earlier time to fall back to; retry a few times.
+async function readPlan(today, label) {
+  log(`Reading ${label} plan (${today}).`);
+  let lastError = null;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const result = await runAction("plan", { planDate: today });
+    if (result.json) return { plan: result.json };
+    lastError = result.error;
+    if (attempt < 3) {
+      log(`Reading the plan failed (${lastError?.message ?? "no output"}); retrying in 60s.`);
+      await sleep(60_000);
+    }
+  }
+  return { plan: null, error: lastError };
+}
+
+// The regular day's shape, for picking times on a normal day.
+function dayShape(config, today) {
+  return {
+    flex: { clockIn: timeRange(today, config.flexClockIn), clockOut: timeRange(today, config.flexClockOut) },
+    lunch: timeRange(today, config.lunch),
+    shift: timeRange(today, config.shift)
+  };
+}
+
+function normalPlan(config, today, clockInAt) {
+  const { flex, lunch, shift } = dayShape(config, today);
+  return computeDayPlan({ shiftStart: shift.start, shiftEnd: shift.end, leaves: [], lunch, flex, clockInAt });
+}
+
 async function processToday() {
   const today = dateText(taipeiDateParts());
   const schedule = { date: today, type: "pending", clockIn: null, clockOut: null };
   const save = () => writeSchedule(schedule);
+  const finish = (config, type, reason) => {
+    schedule.type = type;
+    schedule.reason = reason;
+    schedule.nextCheckAt = nextPlanCheck(config);
+    save();
+  };
+
+  // One sleep until the plan check; punch.conf is read again when it ends,
+  // so an edit made overnight still shapes the same day.
   let config;
   for (;;) {
     config = await currentConfig();
     schedule.checkAt = timeRange(today, config.flexClockIn).start - PLAN_CHECK_LEAD_MS;
     save();
-    const wait = schedule.checkAt - Date.now();
-    if (wait <= 0) break;
-    await sleep(Math.min(wait, CONFIG_RECHECK_MS));
+    if (Date.now() >= schedule.checkAt) break;
+    await sleepUntil(schedule.checkAt);
   }
 
-  // A transient network blip here (seen in practice) would otherwise skip
-  // the whole day, since there is no earlier time to fall back to; retry a
-  // few times before actually giving up.
-  log(`Reading today's plan (${today}).`);
-  let plan = null;
-  let lastError = null;
-  for (let attempt = 1; attempt <= 3 && !plan; attempt += 1) {
-    const result = await runAction("plan", { planDate: today });
-    plan = result.json;
-    lastError = result.error;
-    if (!plan && attempt < 3) {
-      log(`Reading today's plan failed (${lastError?.message ?? "no output"}); retrying in 60s.`);
-      await sleep(60_000);
-    }
-  }
+  const first = await readPlan(today, "today's");
+  const plan = first.plan;
   if (!plan) {
-    log(`Could not read today's plan (${lastError?.message ?? "no output"}); nothing scheduled for ${today}.`);
-    schedule.type = "unknown";
-    schedule.reason = "the plan could not be read";
-    schedule.nextCheckAt = nextPlanCheck(config);
-    save();
-    return;
+    log(`Could not read today's plan (${first.error?.message ?? "no output"}); nothing scheduled for ${today}.`);
+    return finish(config, "unknown", "the plan could not be read");
   }
-
   if (plan.type === "off") {
     log(`${today}: ${plan.reason ?? "no work today"}; nothing to schedule.`);
-    schedule.type = "off";
-    schedule.reason = plan.reason;
-    schedule.nextCheckAt = nextPlanCheck(config);
-    save();
-    return;
+    return finish(config, "off", plan.reason);
   }
 
   let clockInAt = null;
   let clockOutAt = null;
-
   if (plan.type === "leave-at-start" || plan.type === "leave-at-end") {
     clockInAt = plan.clockInDueAt ? Date.parse(plan.clockInDueAt) : null;
     clockOutAt = plan.clockOutDueAt ? Date.parse(plan.clockOutDueAt) : null;
   } else if (plan.type === "normal") {
-    const flex = { clockIn: timeRange(today, config.flexClockIn), clockOut: timeRange(today, config.flexClockOut) };
-    const lunch = timeRange(today, config.lunch);
-    const shift = timeRange(today, config.shift);
     clockInAt = plan.hasClockIn
       ? Date.parse(plan.clockInAt)
-      : pickClockInTime(
-          computeDayPlan({ shiftStart: shift.start, shiftEnd: shift.end, leaves: [], lunch, flex, clockInAt: null }),
-          Date.now()
-        );
-    if (!plan.hasClockOut) {
-      clockOutAt = pickClockOutTime(
-        computeDayPlan({ shiftStart: shift.start, shiftEnd: shift.end, leaves: [], lunch, flex, clockInAt }),
-        Date.now()
-      );
-    }
+      : pickClockInTime(normalPlan(config, today, null), Date.now());
+    if (!plan.hasClockOut) clockOutAt = pickClockOutTime(normalPlan(config, today, clockInAt), Date.now());
   } else {
     // leave-plan-missed or anything unrecognized: clock-in.js's own guards
     // already leave these to be punched by hand.
     log(`${today}: plan type "${plan.type}" is left to punch by hand.`);
-    schedule.type = "off";
-    schedule.reason = `${plan.type}; punch by hand`;
-    schedule.nextCheckAt = nextPlanCheck(config);
-    save();
-    return;
+    return finish(config, "off", `${plan.type}; punch by hand`);
   }
 
   log(
@@ -225,7 +223,34 @@ async function processToday() {
       : { state: "none", detail: "nothing to punch automatically" };
   save();
 
-  if (clockInAt && !plan.hasClockIn) await waitAndRun("clock-in", clockInAt, today, schedule.clockIn, save);
+  // The clock-in run checks the day itself when it fires (leave filed since
+  // the plan check moves it or skips it). Once it has, look at the day once
+  // more and keep the clock-out time only if it still makes sense.
+  if (clockInAt && !plan.hasClockIn) {
+    await waitAndRun("clock-in", clockInAt, today, schedule.clockIn, save);
+    if (clockOutAt) {
+      const { plan: fresh } = await readPlan(today, "the updated");
+      if (fresh) {
+        const revised = reviseClockOut(fresh, clockOutAt, (clockInMs) =>
+          pickClockOutTime(normalPlan(config, today, clockInMs), Date.now())
+        );
+        log(`Clock-out after the clock-in check: ${revised.why}${revised.at ? ` (${taipeiTime(revised.at)})` : ""}.`);
+        clockOutAt = revised.at;
+        if (clockOutAt) {
+          schedule.type = fresh.type;
+          schedule.clockOut = { state: "planned", at: clockOutAt };
+        } else {
+          schedule.type = fresh.type;
+          schedule.reason = fresh.reason ?? revised.why;
+          schedule.clockOut = { state: "none", detail: revised.why };
+        }
+        save();
+      }
+    }
+  }
+
+  // The clock-out run checks the day as well: too early moves it to the time
+  // it is due, otherwise it just punches. Nothing is planned for tomorrow.
   if (clockOutAt && !plan.hasClockOut) await waitAndRun("clock-out", clockOutAt, today, schedule.clockOut, save);
   schedule.nextCheckAt = nextPlanCheck(config);
   save();

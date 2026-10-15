@@ -71,7 +71,7 @@ async function ensureEdgeRunning() {
     join(PROJECT_ROOT, "start-edge.ps1"),
     "-Url",
     APP_URL
-  ]);
+  ], { windowsHide: true });
   const deadline = Date.now() + EDGE_READY_TIMEOUT_MS;
   while (Date.now() < deadline) {
     if (await edgeIsReady()) return;

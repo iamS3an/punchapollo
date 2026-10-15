@@ -91,24 +91,30 @@ the site's own app.
 ## Schedule
 
 `npm run daemon:start` runs `src/daemon.js` under pm2, a single process kept
-alive on Windows instead of a crontab. Each weekday it:
+alive on Windows instead of a crontab. It does not poll: between the moments
+below it is simply asleep, and nothing is started or opened.
 
-- Waits until half an hour before the flexible clock-in hours open, then
-  reads the day's plan (the same `clock:plan` logic).
-- On a normal day with no clock-in yet, picks a random clock-in minute within
-  30 minutes of `SHIFT_START` itself (not from the plan), then waits for it.
-  Already clocked in - for example after a restart partway through the day -
-  it uses that actual time instead of rolling a new one.
-- On a leave day, uses the window the plan computes for it (shortly before a
-  morning leave ends, or shortly before an afternoon leave begins) instead of
-  the regular shift-start formula.
-- Either way, once a clock-in time is set, picks the clock-out time 1 to 5
-  minutes after a full shift from it, and waits for that too.
-- A punch that comes back "not due yet" (too early) is retried at the time it
-  reports.
-- After a clock-out, or a day with nothing to punch, it moves on to the next
-  weekday and reads that day's plan fresh - so leave filed overnight, or
-  while the computer was off, is still picked up before the day's clock-in.
+Each weekday it looks at the day at three moments:
+
+| When | What it does |
+|---|---|
+| Half an hour before the flexible clock-in hours open (06:30 by default) | Reads the day's plan (the same `clock:plan` logic) and plans the whole day: a holiday, rest day or full-day leave means no punches; a leave day gets the times the plan computes for it; a normal day gets a random clock-in within 30 minutes of `SHIFT_START` and a clock-out 1 to 5 minutes after a full shift from it |
+| The clock-in time | The punch run checks the day itself: leave filed since 06:30 moves the clock-in to a reasonable time, or skips it. Afterwards the plan is read once more and the clock-out time is kept if it is still reasonable, and re-picked, switched to the leave plan or dropped if it is not |
+| The clock-out time | The punch run checks the day again: too early moves it to the time it is due, otherwise it punches straight away. Nothing is planned for tomorrow |
+
+- With a clock-in already made - for example after a restart partway through
+  the day - the actual time is used instead of rolling a new one.
+- A punch that comes back "not due yet" is retried at the time it reports.
+- The next weekday starts over at its own plan check, so leave filed overnight,
+  or while the computer was off, is picked up before the day's clock-in.
+- Leave filed after the last of those moments is not seen until the next one:
+  filed at 10:30 for 14:00, it is only noticed at the clock-out time, which
+  by then is too late for the leave plan and is left to be punched by hand.
+
+`punch.conf` is read again whenever the daemon wakes for one of these
+moments, and every punch run reads it afresh. Times the daemon has already
+picked for today are not recomputed by an edit; `npm run daemon:restart` reads
+the file and the day's plan again and picks them anew.
 
 `npm run clock:plan` (and `config:show`) ends with the times the daemon has
 picked for today and when its next plan check is. To look at a specific day's
@@ -116,8 +122,9 @@ plan from the site, run `npm run clock:plan -- 2026-10-23`.
 `npm run daemon:logs` tails the daemon's own output; `logs/punch.log` keeps
 the scheduled-run entries.
 
-Only one scheduled run works at a time; the daemon waits for each one to
-finish before starting the next.
+Only one daemon acts at a time, even if two get started (for example a second
+pm2); the other stands by and takes over when the first one is gone. A scheduled
+run is also finished before the next one starts.
 
 ## Why the shift comes from punch.conf
 

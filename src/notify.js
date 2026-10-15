@@ -33,7 +33,7 @@ export async function notifyWindows(title, message, icon = "Info") {
       `[${taipeiClock()}] ${message}`,
       "-Icon",
       icon
-    ]);
+    ], { windowsHide: true });
   } catch (error) {
     console.error(`Notification failed: ${error.message}`);
   }

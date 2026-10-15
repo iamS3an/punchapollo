@@ -133,6 +133,7 @@ also shows every result, but the log is what persists.
 | `Punch submission result is unknown ...` | The punch request itself failed (network/timeout); not retried automatically, since it may already be recorded |
 | `The punch needs a reason ...` | The punch was too early or too late for the day's overtime limits, and the site offered no "no overtime" answer |
 | `Login timed out` | The session expired and nobody signed in, or a stored value was rejected; run `npm run session:login` |
+| Leave filed in the middle of the day was not picked up | The daemon looks at the day at the plan check (06:30), the clock-in and the clock-out only; for leave filed later, punch by hand (see [docs/rules.md](docs/rules.md#schedule)) |
 | No notification shown | Check Windows' notification settings haven't muted PowerShell/balloon tips, or Focus Assist is on |
 | `node.exe: command not found` in WSL | Windows Node.js is missing, or WSL does not expose the Windows PATH (`appendWindowsPath` in `/etc/wsl.conf`) |
 | `punch.conf: ...` | A setting is invalid; `npm run config:show` repeats the message |

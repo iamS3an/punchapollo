@@ -19,7 +19,10 @@ function run(command, args, { env = {}, capture = false } = {}) {
     const child = spawn(command, args, {
       cwd: PROJECT_ROOT,
       env: { ...process.env, ...env },
-      stdio: capture ? ["ignore", "pipe", "pipe"] : "inherit"
+      stdio: capture ? ["ignore", "pipe", "pipe"] : "inherit",
+      // Captured runs come from the daemon, which has no console of its own;
+      // without this each one flashes a window. Interactive runs keep theirs.
+      windowsHide: capture
     });
     let stdout = "";
     let stderr = "";
