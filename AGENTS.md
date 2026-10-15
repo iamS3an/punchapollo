@@ -100,7 +100,7 @@ the Windows side and symlinking it into the WSL home directory, so every
 command below and every later `~/punchapollo` reference still works
 unchanged. If the user would rather keep it entirely in WSL's home directory,
 that is supported: plain `git clone` + `npm install` there, same commands,
-just slower (`daemon:autostart` then also starts the distro at logon). Don't
+just slower (`daemon:register` then also starts the distro at logon). Don't
 insist on the symlink; mention the speed trade-off once and follow their
 choice:
 
@@ -198,11 +198,12 @@ npm run config:show     # confirm the daemon shows as "online" and what it has s
 ```
 
 ```bash
-npm run daemon:autostart   # brings the daemon back after a reboot
+npm run daemon:register   # brings the daemon back after a reboot
 ```
 
-`daemon:autostart` needs no administrator rights or `sudo`: it registers a
+`daemon:register` needs no administrator rights or `sudo`: it registers a
 logon task for the Windows user, from either PowerShell or WSL.
+`daemon:unregister` removes that task again (it leaves a running daemon alone).
 
 If this machine had an older install with `npm run cron:install` already run
 in WSL, `daemon:start` first removes that old crontab block from every WSL

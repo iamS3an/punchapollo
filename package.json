@@ -20,7 +20,8 @@
     "password:set": "node.exe src/cli.js set-secret password",
     "session:test": "node.exe src/cli.js session-test",
     "totp:set": "node.exe src/cli.js set-secret totp",
-    "daemon:autostart": "node.exe src/daemon-ctl.js autostart"
+    "daemon:register": "node.exe src/daemon-ctl.js register",
+    "daemon:unregister": "node.exe src/daemon-ctl.js unregister"
   },
   "dependencies": {
     "pm2": "^5.4.2",

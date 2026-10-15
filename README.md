@@ -37,7 +37,7 @@ npm run session:login              # sign in once in the Edge window that opens
 npm run location:set               # picks your office; punches by its position from now on
 npm run clock:plan                 # shows today's plan, punches nothing
 npm run daemon:start               # starts the scheduler, kept alive by pm2
-npm run daemon:autostart           # brings it back after a reboot
+npm run daemon:register           # brings it back after a reboot
 ```
 
 Every scheduled run is recorded in `logs/punch.log`.
@@ -79,8 +79,8 @@ changing it. An invalid setting stops everything until it is fixed.
 |---|---|
 | `npm run session:login` | Reuses the saved session, or signs in if it has expired |
 | `npm run location:set` | Lists this account's punch locations and sets `GPS_LOCATION_ID` to the one you pick |
-| `npm run daemon:start` / `stop` / `restart` | Starts, stops or restarts the scheduler under pm2; restart after any `punch.conf` edit. `start` is safe to repeat |
-| `npm run daemon:autostart` | Registers a logon task that restores the daemon after a reboot |
+| `npm run daemon:start` / `stop` / `restart` | Starts, stops or restarts the scheduler under pm2; restart after any `punch.conf` edit. `start` is safe to repeat, and a stopped daemon stays stopped after a reboot |
+| `npm run daemon:register` / `unregister` | Registers, or removes, the logon task that restores the daemon after a reboot |
 | `npm run daemon:status` | Shows pm2's status for every app it manages, not just this one |
 
 ### Automatic sign-in (`AUTO_SSO=on` only)

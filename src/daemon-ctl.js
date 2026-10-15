@@ -123,7 +123,7 @@ const quote = (text) => text.replace(/'/g, "''");
 // current Windows user, with no administrator rights. For a project inside
 // WSL, the distro is started first and kept up (the project's files live in
 // it), which is why that case is slower to come back.
-function autostart() {
+function register() {
   const resurrect = `& '${quote(process.execPath)}' '${quote(PM2_JS)}' resurrect`;
   const inner = WSL_DISTRO
     ? `Start-Process wsl.exe -WindowStyle Hidden -ArgumentList '-d','${quote(WSL_DISTRO)}','--','sleep','infinity'; ` +
@@ -138,6 +138,24 @@ function autostart() {
   ].join("; ");
   execFileSync("powershell.exe", ["-NoProfile", "-Command", script], { stdio: "inherit" });
   console.log(`Registered the "${NAME}" logon task${WSL_DISTRO ? ` (it starts WSL distro ${WSL_DISTRO} first)` : ""}.`);
+}
+
+// Removes the logon task register() registered; the daemon itself, if it is
+// running, is left alone.
+function unregister() {
+  const script = [
+    `$task = Get-ScheduledTask -TaskName '${NAME}' -ErrorAction SilentlyContinue`,
+    "if ($task) { Unregister-ScheduledTask -TaskName $task.TaskName -Confirm:$false; 'removed' } else { 'none' }"
+  ].join("; ");
+  const result = execFileSync("powershell.exe", ["-NoProfile", "-Command", script], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "inherit"]
+  }).trim();
+  console.log(
+    result === "removed"
+      ? `Removed the "${NAME}" logon task; the daemon will not come back after a reboot.`
+      : `There is no "${NAME}" logon task to remove.`
+  );
 }
 
 const command = process.argv[2];
@@ -159,10 +177,14 @@ if (command === "start") {
     pm2("start", join(PROJECT_ROOT, "src", "daemon.js"), "--name", NAME, "--cwd", PROJECT_ROOT, "--time");
   }
   pm2("save");
-} else if (command === "autostart") {
-  autostart();
+} else if (command === "register") {
+  register();
+} else if (command === "unregister") {
+  unregister();
 } else if (command === "stop") {
   pm2("stop", NAME);
+  // Saved as stopped, so a reboot's resurrect does not bring it back.
+  pm2("save");
 } else if (command === "restart") {
   pm2("restart", NAME);
 } else if (command === "logs") {
@@ -171,6 +193,6 @@ if (command === "start") {
   pm2("status");
   printMemory();
 } else {
-  console.error("Usage: daemon-ctl.js start | autostart | stop | restart | logs | status");
+  console.error("Usage: daemon-ctl.js start | register | unregister | stop | restart | logs | status");
   process.exit(2);
 }

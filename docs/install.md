@@ -91,7 +91,7 @@ From WSL, there are two places to put it, and both work:
   (`\\wsl.localhost\...`) was 13-25 seconds per run in testing.
 - **Directly in WSL's home directory.** Fine if you would rather keep
   everything in WSL: just `git clone` and `npm install` there. It is slower,
-  and `npm run daemon:autostart` then also starts the WSL distro and keeps it
+  and `npm run daemon:register` then also starts the WSL distro and keeps it
   up at logon, since the project's files live inside it.
 
 The Windows-side install, with the symlink:
@@ -183,9 +183,11 @@ here on `logs/punch.log` records every scheduled run, and
 `daemon:start` again is harmless: it reports that the daemon is already
 running (or restarts it if it was stopped).
 
-To bring it back after a reboot, run `npm run daemon:autostart` once. It
+To bring it back after a reboot, run `npm run daemon:register` once. It
 registers a logon task for your Windows user, with no administrator rights
-needed, from PowerShell or WSL alike.
+needed, from PowerShell or WSL alike. `npm run daemon:unregister` removes that
+task again; it does not stop a daemon that is running (`daemon:stop` does, and
+a stopped daemon is not brought back by a reboot either).
 
 If you ran an older version's `npm run cron:install` in WSL before,
 `daemon:start` first removes that old crontab block from every WSL distro
