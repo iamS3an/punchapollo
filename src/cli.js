@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig } from "./config.js";
+import { describeSchedule } from "./schedule-state.js";
 import { runClockIn, runLocationSet, runSessionLogin, runSessionTest, runSetSecret } from "./launch.js";
 
 const PROJECT_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -65,6 +66,7 @@ function showConfig() {
   const status = daemonStatus();
   row("Automation (pm2)", status);
   if (status !== "online") console.log("  Run: npm run daemon:start");
+  console.log(`\n${describeSchedule(config).join("\n")}`);
 }
 
 const [command, argument] = process.argv.slice(2);
@@ -74,13 +76,19 @@ try {
   if (command === "config-show") {
     showConfig();
   } else if (command === "clock") {
+    loadConfig();
     result = await runClockIn(argument, {
       scheduled: process.env.PUNCH_SCHEDULED === "1",
       planDate: process.argv[4] || process.env.PUNCH_PLAN_DATE || null
     });
+    if (argument === "plan" && result.code === 0) {
+      console.log(`\n${describeSchedule(loadConfig()).join("\n")}`);
+    }
   } else if (command === "session-login") {
+    loadConfig();
     result = await runSessionLogin();
   } else if (command === "location-set") {
+    loadConfig();
     result = await runLocationSet();
   } else if (command === "session-test") {
     result = await runSessionTest();

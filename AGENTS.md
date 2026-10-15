@@ -194,7 +194,7 @@ the user's call to make, not yours to offer. If they explicitly ask for it:
 ```bash
 npm run clock:plan      # reads the site, punches nothing — check the plan makes sense
 npm run daemon:start    # starts src/daemon.js under pm2; restart it after any punch.conf edit
-npm run config:show     # confirm the daemon shows as "online"
+npm run config:show     # confirm the daemon shows as "online" and what it has scheduled
 ```
 
 ```bash

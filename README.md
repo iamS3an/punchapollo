@@ -68,9 +68,9 @@ changing it. An invalid setting stops everything until it is fixed.
 
 | Command | What it does |
 |---|---|
-| `npm run clock:plan` | Prints today's plan; punches nothing |
+| `npm run clock:plan` | Prints today's plan from the site, then what the daemon has scheduled (the times it picked); punches nothing |
 | `npm run clock:in` / `clock:out` | Punches now, by hand |
-| `npm run config:show` | Shows the settings and whether the daemon is running |
+| `npm run config:show` | Shows the settings, whether the daemon is running, and what it has scheduled |
 | `npm run daemon:logs` | Tails the daemon's own output live |
 
 ### Setup

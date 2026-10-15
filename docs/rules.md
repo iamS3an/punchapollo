@@ -110,7 +110,9 @@ alive on Windows instead of a crontab. Each weekday it:
   weekday and reads that day's plan fresh - so leave filed overnight, or
   while the computer was off, is still picked up before the day's clock-in.
 
-To look at a specific day's plan, run `npm run clock:plan -- 2026-10-23`.
+`npm run clock:plan` (and `config:show`) ends with the times the daemon has
+picked for today and when its next plan check is. To look at a specific day's
+plan from the site, run `npm run clock:plan -- 2026-10-23`.
 `npm run daemon:logs` tails the daemon's own output; `logs/punch.log` keeps
 the scheduled-run entries.
 

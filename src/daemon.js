@@ -7,6 +7,17 @@ import { fileURLToPath } from "node:url";
 import { loadConfig } from "./config.js";
 import { computeDayPlan, pickClockInTime, pickClockOutTime } from "./day-plan.js";
 import { runClockIn } from "./launch.js";
+import {
+  PLAN_CHECK_LEAD_MS,
+  dateText,
+  isWeekday,
+  nextDateText,
+  nextPlanCheck,
+  taipeiDateParts,
+  taipeiTime,
+  timeRange,
+  writeSchedule
+} from "./schedule-state.js";
 
 const PROJECT_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const LOG_PATH = join(PROJECT_ROOT, "logs", "punch.log");
@@ -14,9 +25,6 @@ const HEARTBEAT_PATH = join(PROJECT_ROOT, ".daemon.json");
 const HEARTBEAT_INTERVAL_MS = 10_000;
 // A heartbeat this old means the daemon holding it is gone.
 const HEARTBEAT_STALE_MS = 35_000;
-// Half an hour before the flexible clock-in hours open (06:30 by default):
-// late enough that overnight leave is filed, early enough to still be well before the earliest possible clock-in.
-const PLAN_CHECK_LEAD_MS = 30 * 60_000;
 // While waiting for the plan check, punch.conf is read again this often, so
 // an edit made overnight still shapes the same day.
 const CONFIG_RECHECK_MS = 10 * 60_000;
@@ -42,47 +50,6 @@ function log(line) {
   }
 }
 
-function taipeiDateParts(now = new Date()) {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Asia/Taipei",
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    weekday: "short"
-  }).formatToParts(now);
-  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
-  return { year: Number(values.year), month: Number(values.month), day: Number(values.day), weekday: values.weekday };
-}
-
-function dateText({ year, month, day }) {
-  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-}
-
-function taipeiTime(milliseconds) {
-  return new Intl.DateTimeFormat("zh-TW", {
-    timeZone: "Asia/Taipei",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23"
-  }).format(new Date(milliseconds));
-}
-
-function isWeekday(weekdayShort) {
-  return weekdayShort !== "Sat" && weekdayShort !== "Sun";
-}
-
-// Taipei has no DST, but anchoring at noon before adding a day keeps this
-// correct even if that ever changes.
-function nextDateText(today) {
-  const noon = Date.parse(`${today}T12:00:00+08:00`);
-  return dateText(taipeiDateParts(new Date(noon + 24 * 3_600_000)));
-}
-
-function timeRange(today, { start, end }) {
-  return { start: Date.parse(`${today}T${start}:00+08:00`), end: Date.parse(`${today}T${end}:00+08:00`) };
-}
-
 function parseJson(text) {
   try {
     return JSON.parse((text ?? "").replace(/\r/g, ""));
@@ -105,9 +72,13 @@ async function runAction(action, { planDate = null } = {}) {
 }
 
 // Waits for dueAtMs, runs the action, and follows a "not yet due" reply to
-// the dueAt it reports.
-async function waitAndRun(action, dueAtMs, today) {
+// the dueAt it reports. `entry` is this action's line in the schedule file.
+async function waitAndRun(action, dueAtMs, today, entry, save) {
   for (;;) {
+    entry.state = "planned";
+    entry.at = dueAtMs;
+    entry.detail = undefined;
+    save();
     await sleepUntil(dueAtMs);
     log(`Running scheduled ${action} for ${today}.`);
     const { json, error } = await runAction(action);
@@ -117,9 +88,19 @@ async function waitAndRun(action, dueAtMs, today) {
         dueAtMs = Date.parse(json.dueAt);
         continue;
       }
+      if (json.skipped) {
+        entry.state = "skipped";
+        entry.detail = json.reason;
+      } else {
+        entry.state = "done";
+        entry.at = json.punchDate ? Date.parse(json.punchDate) : Date.now();
+      }
     } else {
       log(`Scheduled ${action} failed: ${error?.message ?? "no output was read"}`);
+      entry.state = "failed";
+      entry.detail = error?.message?.split("\n")[0];
     }
+    save();
     return;
   }
 }
@@ -142,11 +123,14 @@ async function currentConfig() {
 
 async function processToday() {
   const today = dateText(taipeiDateParts());
+  const schedule = { date: today, type: "pending", clockIn: null, clockOut: null };
+  const save = () => writeSchedule(schedule);
   let config;
   for (;;) {
     config = await currentConfig();
-    const checkAt = timeRange(today, config.flexClockIn).start - PLAN_CHECK_LEAD_MS;
-    const wait = checkAt - Date.now();
+    schedule.checkAt = timeRange(today, config.flexClockIn).start - PLAN_CHECK_LEAD_MS;
+    save();
+    const wait = schedule.checkAt - Date.now();
     if (wait <= 0) break;
     await sleep(Math.min(wait, CONFIG_RECHECK_MS));
   }
@@ -168,11 +152,19 @@ async function processToday() {
   }
   if (!plan) {
     log(`Could not read today's plan (${lastError?.message ?? "no output"}); nothing scheduled for ${today}.`);
+    schedule.type = "unknown";
+    schedule.reason = "the plan could not be read";
+    schedule.nextCheckAt = nextPlanCheck(config);
+    save();
     return;
   }
 
   if (plan.type === "off") {
     log(`${today}: ${plan.reason ?? "no work today"}; nothing to schedule.`);
+    schedule.type = "off";
+    schedule.reason = plan.reason;
+    schedule.nextCheckAt = nextPlanCheck(config);
+    save();
     return;
   }
 
@@ -202,6 +194,10 @@ async function processToday() {
     // leave-plan-missed or anything unrecognized: clock-in.js's own guards
     // already leave these to be punched by hand.
     log(`${today}: plan type "${plan.type}" is left to punch by hand.`);
+    schedule.type = "off";
+    schedule.reason = `${plan.type}; punch by hand`;
+    schedule.nextCheckAt = nextPlanCheck(config);
+    save();
     return;
   }
 
@@ -216,8 +212,23 @@ async function processToday() {
           : "no clock-out planned")
   );
 
-  if (clockInAt && !plan.hasClockIn) await waitAndRun("clock-in", clockInAt, today);
-  if (clockOutAt && !plan.hasClockOut) await waitAndRun("clock-out", clockOutAt, today);
+  schedule.type = plan.type;
+  schedule.clockIn = plan.hasClockIn
+    ? { state: "done", at: Date.parse(plan.clockInAt) }
+    : clockInAt
+      ? { state: "planned", at: clockInAt }
+      : { state: "none", detail: "nothing to punch automatically" };
+  schedule.clockOut = plan.hasClockOut
+    ? { state: "done" }
+    : clockOutAt
+      ? { state: "planned", at: clockOutAt }
+      : { state: "none", detail: "nothing to punch automatically" };
+  save();
+
+  if (clockInAt && !plan.hasClockIn) await waitAndRun("clock-in", clockInAt, today, schedule.clockIn, save);
+  if (clockOutAt && !plan.hasClockOut) await waitAndRun("clock-out", clockOutAt, today, schedule.clockOut, save);
+  schedule.nextCheckAt = nextPlanCheck(config);
+  save();
 }
 
 function readHeartbeat() {
@@ -274,6 +285,11 @@ async function main() {
       await processToday();
     } else {
       log(`${dateText(today)} is a weekend; nothing to schedule.`);
+      writeSchedule({
+        date: dateText(today),
+        type: "weekend",
+        nextCheckAt: nextPlanCheck(await currentConfig())
+      });
     }
     const wakeAt = Date.parse(`${nextDateText(dateText(today))}T00:05:00+08:00`);
     await sleepUntil(wakeAt);

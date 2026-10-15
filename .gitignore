@@ -11,3 +11,4 @@ punch.conf
 
 # Written by the running daemon; shows whether it is alive.
 .daemon.json
+.schedule.json
